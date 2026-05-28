@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id String @id @default(uuid())
+  username String
+  email String @unique
+  password String
+  createdAt DateTime @default(now())
+  todos Todo[]
+}
+
+model Todo {
+  id String @id @default(uuid())
+  userId String
+  title String
+  description String?
+  completed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subtasks Subtask[]
+  @@index([userId])
+}
+
+model Subtask {
+  id        String   @id @default(uuid())
+  todoId   String
+  title     String
+  completed Boolean  @default(false)
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  todo Todo @relation(fields: [todoId], references: [id], onDelete: Cascade)
+  @@index([todoId, position])
+}
