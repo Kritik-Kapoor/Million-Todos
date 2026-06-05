@@ -41,6 +41,7 @@ export function useApiMutation<TBody = void>(
         });
 
         const json = await response.json().catch(() => null);
+        console.log(json);
 
         if (!response.ok) {
           onError?.(json);

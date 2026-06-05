@@ -1,26 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Circle, Trash2, Layers } from "lucide-react";
-
+import {
+  CheckCircle2,
+  Circle,
+  Trash2,
+  Layers,
+  GripVertical,
+} from "lucide-react";
+import { DragDropProvider } from "@dnd-kit/react";
+import { move } from "@dnd-kit/helpers";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { VirtualList } from "./shared/VirtualList";
+import { VirtualList, type DragHandleRef } from "./shared/VirtualList";
 import SheetDialog from "./shared/SheetDialog";
-
-export type Subtask = {
-  id: string;
-  title: string;
-  completed: boolean;
-};
-
-export type Todo = {
-  id: string;
-  title: string;
-  completed: boolean;
-  subtasks: Subtask[];
-};
+import type { Todo, Subtask } from "@/types/todo";
 
 type TodoListProps = {
   todos: Todo[];
@@ -33,22 +28,39 @@ const CONTAINER_HEIGHT = 500;
 const SUBTASK_ROW_HEIGHT = 56;
 const SUBTASK_LIST_HEIGHT = 500;
 
-// ─── Subtask sheet ──────────────────────────────────────────────────────────
+// ─── Subtask sheet ────
 
 const SubtaskRow = ({
   subtask,
   style,
+  dragHandleRef,
+  isDragging,
 }: {
   subtask: Subtask;
   style: React.CSSProperties;
+  dragHandleRef?: DragHandleRef;
+  isDragging?: boolean;
 }) => (
   <div style={style} className="px-1 py-1">
     <div
       className={cn(
         "flex h-full items-center gap-3 rounded-xl border border-border/60 px-4",
         subtask.completed && "bg-muted/50",
+        isDragging && "opacity-50 ring-2 ring-primary/40",
       )}
     >
+      {/* Drag handle — only rendered when dragHandleRef is provided */}
+      {dragHandleRef && (
+        <button
+          ref={dragHandleRef}
+          type="button"
+          aria-label="Drag to reorder"
+          className="shrink-0 cursor-grab touch-none text-muted-foreground/50 hover:text-muted-foreground active:cursor-grabbing"
+        >
+          <GripVertical className="size-4" />
+        </button>
+      )}
+
       {subtask.completed ? (
         <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
       ) : (
@@ -67,6 +79,53 @@ const SubtaskRow = ({
     </div>
   </div>
 );
+
+// --- Draggable subtask list ---
+// Isolated component so DragDropProvider + subtask state live together cleanly.
+
+const DraggableSubtaskList = ({
+  initialSubtasks,
+}: {
+  initialSubtasks: Subtask[];
+}) => {
+  const [subtasks, setSubtasks] = useState(initialSubtasks);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  return (
+    <DragDropProvider
+      onDragStart={(event) => {
+        if (event.operation.source) {
+          setActiveId(String(event.operation.source.id));
+        }
+      }}
+      onDragEnd={(event) => {
+        setActiveId(null);
+        if (!event.canceled) {
+          setSubtasks((prev) => move(prev, event));
+        }
+      }}
+    >
+      <VirtualList
+        items={subtasks}
+        itemHeight={SUBTASK_ROW_HEIGHT}
+        height={SUBTASK_LIST_HEIGHT}
+        className="rounded-xl"
+        isDraggableList
+        getItemId={(subtask) => subtask.id}
+        activeId={activeId}
+        renderItem={(subtask, _i, style, dragHandleRef, isDragging) => (
+          <SubtaskRow
+            key={subtask.id}
+            subtask={subtask}
+            style={style}
+            dragHandleRef={dragHandleRef}
+            isDragging={isDragging}
+          />
+        )}
+      />
+    </DragDropProvider>
+  );
+};
 
 // ─── Todo list ───────────────────────────────────────────────────────────────
 
@@ -105,7 +164,6 @@ const TodoList = ({ todos, onToggleTodo, onDeleteTodo }: TodoListProps) => {
               )}
             >
               <div className="flex h-full items-center gap-2 px-4">
-                {/* Complete toggle */}
                 <Button
                   type="button"
                   variant="ghost"
@@ -126,7 +184,6 @@ const TodoList = ({ todos, onToggleTodo, onDeleteTodo }: TodoListProps) => {
                   )}
                 </Button>
 
-                {/* Title + meta */}
                 <div className="min-w-0 flex-1">
                   <p
                     className={cn(
@@ -141,33 +198,29 @@ const TodoList = ({ todos, onToggleTodo, onDeleteTodo }: TodoListProps) => {
                   </p>
                 </div>
 
-                {/* Subtask count + sheet trigger */}
                 <button
                   type="button"
-                  disabled={todo.subtasks.length === 0}
+                  disabled={todo.subtaskCount === 0}
                   aria-label={
-                    todo.subtasks.length > 0
-                      ? `View ${todo.subtasks.length} subtasks`
+                    todo.subtaskCount > 0
+                      ? `View ${todo.subtaskCount} subtasks`
                       : "No subtasks"
                   }
-                  onClick={() =>
-                    todo.subtasks.length > 0 && setSelectedTodo(todo)
-                  }
+                  onClick={() => todo.subtaskCount > 0 && setSelectedTodo(todo)}
                   className={cn(
                     "flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-xs transition",
-                    todo.subtasks.length > 0
+                    todo.subtaskCount > 0
                       ? "cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground"
                       : "cursor-default text-muted-foreground/50",
                   )}
                 >
                   <Layers className="size-3.5" />
                   <span>
-                    {todo.subtasks.length.toLocaleString()}{" "}
-                    {todo.subtasks.length === 1 ? "subtask" : "subtasks"}
+                    {todo.subtaskCount.toLocaleString()}{" "}
+                    {todo.subtaskCount === 1 ? "subtask" : "subtasks"}
                   </span>
                 </button>
 
-                {/* Delete */}
                 <Button
                   type="button"
                   variant="ghost"
@@ -184,25 +237,17 @@ const TodoList = ({ todos, onToggleTodo, onDeleteTodo }: TodoListProps) => {
         )}
       />
 
-      {/* Subtask sheet — only mounts when a todo with subtasks is selected */}
       <SheetDialog
         isOpen={selectedTodo !== null}
         onClose={() => setSelectedTodo(null)}
         title={selectedTodo?.title ?? ""}
-        description={`${selectedTodo?.subtasks.length.toLocaleString() ?? 0} ${
-          selectedTodo?.subtasks.length === 1 ? "subtask" : "subtasks"
+        description={`${selectedTodo?.subtaskCount.toLocaleString() ?? 0} ${
+          selectedTodo?.subtaskCount === 1 ? "subtask" : "subtasks"
         }`}
       >
         {selectedTodo && (
-          <VirtualList
-            items={selectedTodo.subtasks}
-            itemHeight={SUBTASK_ROW_HEIGHT}
-            height={SUBTASK_LIST_HEIGHT}
-            className="rounded-xl"
-            renderItem={(subtask, _i, style) => (
-              <SubtaskRow key={subtask.id} subtask={subtask} style={style} />
-            )}
-          />
+          // TODO: Fetch subtasks from the server
+          <DraggableSubtaskList key={selectedTodo.id} initialSubtasks={[]} />
         )}
       </SheetDialog>
     </>

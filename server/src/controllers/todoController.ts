@@ -2,6 +2,52 @@ import type { Request, Response } from "express";
 
 import { prisma } from "../config/db.js";
 
+export const getTodos = async (req: Request, res: Response) => {
+  const BATCH_SIZE = 5000;
+
+  res.setHeader("Content-Type", "application/x-ndjson");
+  res.setHeader("Transfer-Encoding", "chunked");
+  res.setHeader("Cache-Control", "no-cache");
+
+  const userId = req.user?.userId;
+  let cursor: number | undefined = undefined;
+  type TodoRow = Awaited<ReturnType<typeof prisma.todo.findMany>>[number];
+  let todos: TodoRow[] = [];
+
+  try {
+    while (true) {
+      todos = await prisma.todo.findMany({
+        where: { userId },
+        take: BATCH_SIZE,
+        orderBy: { seq: "asc" },
+        ...(cursor !== undefined ? { skip: 1, cursor: { seq: cursor } } : {}),
+      });
+
+      if (todos.length === 0) break;
+
+      for (const todo of todos) {
+        res.write(JSON.stringify(todo) + "\n");
+      }
+
+      cursor = todos[todos.length - 1]!.seq;
+
+      // Fewer rows than requested means we've reached the last batch
+      if (todos.length < BATCH_SIZE) break;
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    if (!res.headersSent) {
+      // Error before streaming started — can still set status
+      res.status(500).json({ message });
+    } else {
+      // Mid-stream error — send a sentinel error line so the client knows
+      res.write(JSON.stringify({ error: message }) + "\n");
+    }
+  } finally {
+    res.end();
+  }
+};
+
 /**
  * GET /todos/:todoId/subtasks
  *

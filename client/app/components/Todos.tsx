@@ -1,54 +1,105 @@
 "use client";
 
-import { SubmitEvent, useMemo, useState } from "react";
+import { SubmitEvent, useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
-
-import dynamic from "next/dynamic";
-
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import type { Todo } from "./TodoList";
+import type { Todo } from "@/types/todo";
+import dynamic from "next/dynamic";
 
-// react-window uses ResizeObserver and window — skip SSR to avoid a hang/crash
-// and to ensure the List mounts with accurate browser dimensions.
+// Can't use SSR with react-window since it uses ResizeObserver and window so the page needs to be rendered in the browser.
+// and to ensure the List mounts with accurate browser dimensions for the VirtualList to work correctly.
 const TodoList = dynamic(() => import("./TodoList"), { ssr: false });
 
 const Todos = () => {
-  // Lazy initializer so the 1M-item array is only created on the client,
-  // never during server rendering.
-  const [todos, setTodos] = useState<Todo[]>(() => {
-    // Todos with large subtask lists to exercise VirtualList inside the sheet.
-    const LARGE_SUBTASK_IDS = new Set([1, 5]); // 10 000 subtasks each
-    const MEDIUM_SUBTASK_IDS = new Set([100, 250]); // 1 000 subtasks each
+  const [todos, setTodos] = useState<Todo[]>([]);
 
-    return Array.from({ length: 1_000_000 }, (_, index) => {
-      const todoNumber = index + 1;
-      const subtaskCount = LARGE_SUBTASK_IDS.has(todoNumber)
-        ? 10_000
-        : MEDIUM_SUBTASK_IDS.has(todoNumber)
-          ? 1_000
-          : 0;
+  useEffect(() => {
+    const controller = new AbortController();
 
-      return {
-        id: String(todoNumber),
-        title: `Todo no. ${todoNumber}`,
-        completed: false,
-        subtasks: Array.from({ length: subtaskCount }, (_, si) => ({
-          id: `${todoNumber}-${si + 1}`,
-          title: `Subtask ${si + 1} of Todo no. ${todoNumber}`,
-          completed: false,
-        })),
-      };
-    });
-  });
+    const streamTodos = async () => {
+      let todosBatch: Todo[] = [];
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/todos`,
+          {
+            credentials: "include",
+            signal: controller.signal,
+          },
+        );
+
+        if (!response.ok || !response.body) return;
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) {
+            if (todosBatch.length > 0)
+              setTodos((prev) => [...prev, ...todosBatch]);
+            break;
+          }
+          // Wait for the next chunk of data, since the current chunk might have incomplete lines
+          buffer += decoder.decode(value, { stream: true });
+
+          const lines = buffer.split("\n");
+          // Last element may be an incomplete chunk, keep it in the buffer so that it can be processed in the next iteration
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const parsed = JSON.parse(line) as Todo & {
+                error?: string;
+              };
+              if (parsed.error) {
+                // Need to show this error in UI
+                console.error("[stream] server error:", parsed.error);
+                // Flush whatever we have so the UI isn't left empty
+                if (todosBatch.length > 0) {
+                  const batch = todosBatch;
+                  todosBatch = [];
+                  setTodos((prev) => [...prev, ...batch]);
+                }
+                return;
+              }
+              todosBatch.push(parsed);
+            } catch {
+              console.error("[stream] failed to parse line:", line);
+            }
+          }
+          // Do setState in batches to avoid re-rendering the entire list 1M times.
+          // Doing individual setState calls for each todo would be too slow and will cause the UI to freeze and crash for large lists.
+          // Doing individual setState calls will equate to 1M re-renders.
+          // Whereas with batching: 1M/10k -> 100 batches -> 100 re-renders.
+          if (todosBatch.length >= 10000) {
+            const batch = todosBatch;
+            todosBatch = [];
+            setTodos((prev) => [...prev, ...batch]);
+          }
+        }
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          console.error("[stream] error:", err);
+        }
+      }
+    };
+
+    streamTodos();
+
+    return () => controller.abort();
+  }, []);
+
   const [newTodoTitle, setNewTodoTitle] = useState("");
 
   const completedCount = useMemo(
     () => todos.filter((todo) => todo.completed).length,
     [todos],
   );
-
   const activeCount = todos.length - completedCount;
 
   const handleCreateTodo = (event: SubmitEvent<HTMLFormElement>) => {
@@ -62,7 +113,7 @@ const Todos = () => {
         id: crypto.randomUUID(),
         title,
         completed: false,
-        subtasks: [],
+        subtaskCount: 0,
       },
       ...currentTodos,
     ]);
@@ -94,20 +145,21 @@ const Todos = () => {
             </h1>
             <p className="mt-3 max-w-xl text-sm text-muted-foreground sm:text-base">
               Capture tasks quickly, track what is still active, and clear the
+              <br />
               list as you finish.
             </p>
           </div>
 
           <div className="grid grid-cols-3 gap-3 sm:min-w-80">
-            <Card className="gap-1 rounded-2xl p-4 text-center">
+            <Card className="gap-1 rounded-2xl p-4 text-center min-w-[140px]">
               <span className="text-2xl font-semibold">{todos.length}</span>
               <span className="text-muted-foreground">Total</span>
             </Card>
-            <Card className="gap-1 rounded-2xl p-4 text-center">
+            <Card className="gap-1 rounded-2xl p-4 text-center min-w-[140px]">
               <span className="text-2xl font-semibold">{activeCount}</span>
               <span className="text-muted-foreground">Active</span>
             </Card>
-            <Card className="gap-1 rounded-2xl p-4 text-center">
+            <Card className="gap-1 rounded-2xl p-4 text-center min-w-[140px]">
               <span className="text-2xl font-semibold">{completedCount}</span>
               <span className="text-muted-foreground">Done</span>
             </Card>
