@@ -7,7 +7,7 @@ import { useSortable } from "@dnd-kit/react/sortable";
 // Limit the spacer height to 15 million pixels to avoid browser issues
 const MAX_SPACER_HEIGHT = 15_000_000;
 
-// ─── SortableItemWrapper ────────────────────────────────────────────────────
+// ─── SortableItemWrapper ───
 // Thin wrapper that calls useSortable with the item's *real* array index.
 // renderItem is responsible for attaching the drag handle ref itself — we
 // expose dragHandleRef via the render prop so callers can wire it up.

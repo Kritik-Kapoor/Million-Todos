@@ -13,8 +13,10 @@ interface SheetDialogProps {
   isOpen: boolean;
   onClose: () => void;
   children: React.ReactNode;
-  title: string;
-  description?: string;
+  title: React.ReactNode;
+  /** Used for screen readers when `isTitleHidden` is true and title is not plain text */
+  titleLabel?: string;
+  description?: React.ReactNode;
   isTitleHidden?: boolean;
 }
 
@@ -22,17 +24,21 @@ const SheetDialog = ({
   isOpen,
   onClose,
   children,
-  title = "",
-  description = "",
+  title,
+  titleLabel = "",
+  description,
   isTitleHidden = false,
 }: SheetDialogProps) => {
+  const hiddenTitle =
+    titleLabel || (typeof title === "string" ? title : "Dialog");
+
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent className="w-full max-w-[600px] overflow-y-auto pt-20 sm:max-w-[90%] md:max-w-[500px] lg:max-w-[600px] lg:pt-6 xl:max-w-[700px]">
-        <SheetHeader className="mb-7">
+        <SheetHeader>
           {isTitleHidden ? (
             <VisuallyHidden>
-              <SheetTitle>{title}</SheetTitle>
+              <SheetTitle>{hiddenTitle}</SheetTitle>
             </VisuallyHidden>
           ) : (
             <SheetTitle>{title}</SheetTitle>

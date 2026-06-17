@@ -13,7 +13,7 @@ type CurrentUser = {
 
 async function getCurrentUser(): Promise<CurrentUser> {
   const cookieStore = await cookies();
-  const token = cookieStore.get(process.env.NEXT_PUBLIC_JWT_SECRET_KEY!);
+  const token = cookieStore.get(process.env.COOKIE_NAME!);
 
   if (!token) {
     redirect("/login");
@@ -21,7 +21,7 @@ async function getCurrentUser(): Promise<CurrentUser> {
 
   const response = await fetch(`${BASE_URL}/auth/me`, {
     headers: {
-      Cookie: `${process.env.NEXT_PUBLIC_JWT_SECRET_KEY}=${token.value}`,
+      Cookie: `${process.env.COOKIE_NAME}=${token.value}`,
       Accept: "application/json",
     },
   });
