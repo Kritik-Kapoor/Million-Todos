@@ -1,3 +1,5 @@
+import type { ApiResponse } from "./api";
+
 export type Subtask = {
   id: string;
   title: string;
@@ -18,15 +20,7 @@ export type SubtaskCounts = {
   pending: number;
 };
 
-export type SubtasksResponse = {
-  status: string;
-  data: {
-    subtasks: Subtask[];
-    counts: SubtaskCounts;
-  };
-};
-
-export type FetchSubtasksResult = {
+export type SubtasksResponse = ApiResponse<{
   subtasks: Subtask[];
   counts: SubtaskCounts;
-};
+}>;

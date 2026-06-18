@@ -1,83 +1,35 @@
-import type {
-  FetchSubtasksResult,
-  SubtasksResponse,
-  Subtask,
-} from "@/types/todo";
+import { apiFetch } from "@/lib/apiClient";
+import type { Subtask, SubtasksResponse } from "@/types/todo";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-export const fetchSubtasks = async (
+export const fetchSubtasks = (
   todoId: string,
   signal?: AbortSignal,
-): Promise<FetchSubtasksResult> => {
-  const response = await fetch(`${BASE_URL}/todos/${todoId}/subtasks`, {
-    credentials: "include",
+): Promise<SubtasksResponse["data"]> =>
+  apiFetch<SubtasksResponse["data"]>(`/todos/${todoId}/subtasks`, {
     signal,
+    fallbackErrorMessage: "Failed to fetch subtasks",
   });
 
-  if (!response.ok) throw new Error("Failed to fetch subtasks");
-
-  const json = (await response.json()) as SubtasksResponse;
-  return {
-    subtasks: json.data.subtasks,
-    counts: json.data.counts,
-  };
-};
-
-export const updateSubtask = async (
+export const updateSubtask = (
   subtaskId: string,
   data: Partial<Pick<Subtask, "title" | "completed" | "position">>,
-) => {
-  const response = await fetch(`${BASE_URL}/todos/subtasks/${subtaskId}`, {
+) =>
+  apiFetch<{ subtask: Subtask }>(`/todos/subtasks/${subtaskId}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(data),
-  });
+    body: data,
+    fallbackErrorMessage: "Failed to update subtask",
+  }).then(({ subtask }) => subtask);
 
-  if (!response.ok) {
-    const json = (await response.json().catch(() => null)) as {
-      message?: string;
-    } | null;
-    throw new Error(json?.message ?? "Failed to update subtask");
-  }
-
-  const json = (await response.json()) as { data: { subtask: Subtask } };
-  return json.data.subtask;
-};
-
-export const createSubtask = async (todoId: string, title: string) => {
-  const response = await fetch(`${BASE_URL}/todos/${todoId}/subtasks`, {
+export const createSubtask = (todoId: string, title: string) =>
+  apiFetch<{ subtask: Subtask }>(`/todos/${todoId}/subtasks`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ title }),
-  });
+    body: { title },
+    fallbackErrorMessage: "Failed to create subtask",
+  }).then(({ subtask }) => subtask);
 
-  if (!response.ok) {
-    const json = (await response.json().catch(() => null)) as {
-      message?: string;
-    } | null;
-    throw new Error(json?.message ?? "Failed to create subtask");
-  }
-
-  const json = (await response.json()) as { data: { subtask: Subtask } };
-  return json.data.subtask;
-};
-
-export const deleteSubtask = async (subtaskId: string) => {
-  const response = await fetch(`${BASE_URL}/todos/subtasks/${subtaskId}`, {
+export const deleteSubtask = (subtaskId: string) =>
+  apiFetch<null>(`/todos/subtasks/${subtaskId}`, {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
+    fallbackErrorMessage: "Failed to delete subtask",
+    responseType: "envelope",
   });
-
-  if (!response.ok) {
-    const json = (await response.json().catch(() => null)) as {
-      message?: string;
-    } | null;
-    throw new Error(json?.message ?? "Failed to delete subtask");
-  }
-
-  return await response.json();
-};

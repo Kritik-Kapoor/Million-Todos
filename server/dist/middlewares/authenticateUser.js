@@ -1,11 +1,10 @@
 import jwt from "jsonwebtoken";
+import { ApiError } from "../utils/apiResponse.js";
 export const authenticateUser = (req, res, next) => {
     try {
         const token = req.cookies["million-todos-token"];
         if (!token) {
-            return res.status(401).json({
-                message: "Unauthorized user, No token provided",
-            });
+            return new ApiError(401, "Unauthorized user, No token provided").send(res);
         }
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.user = {
@@ -13,9 +12,7 @@ export const authenticateUser = (req, res, next) => {
         };
         next();
     }
-    catch (error) {
-        return res.status(401).json({
-            message: "Unauthorized user, Invalid token",
-        });
+    catch {
+        return new ApiError(401, "Unauthorized user, Invalid token").send(res);
     }
 };

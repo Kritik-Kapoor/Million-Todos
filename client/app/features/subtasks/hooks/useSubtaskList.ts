@@ -193,7 +193,7 @@ export function useSubtaskList(
   const handleDeleteSubtask = useCallback(
     async (subtask: Subtask) => {
       const isDeleted = await deleteSubtask(subtask.id);
-      if (isDeleted?.status !== "success") return;
+      if (!isDeleted?.success) return;
 
       setSubtasks((prev) => prev.filter((s) => s.id !== subtask.id));
 

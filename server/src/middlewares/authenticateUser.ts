@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { ApiError } from "../utils/apiResponse.js";
 
 export const authenticateUser = (
   req: Request,
@@ -10,9 +11,7 @@ export const authenticateUser = (
     const token = req.cookies["million-todos-token"];
 
     if (!token) {
-      return res.status(401).json({
-        message: "Unauthorized user, No token provided",
-      });
+      return new ApiError(401, "Unauthorized user, No token provided").send(res);
     }
 
     const decoded = jwt.verify(
@@ -25,9 +24,7 @@ export const authenticateUser = (
     };
 
     next();
-  } catch (error) {
-    return res.status(401).json({
-      message: "Unauthorized user, Invalid token",
-    });
+  } catch {
+    return new ApiError(401, "Unauthorized user, Invalid token").send(res);
   }
 };

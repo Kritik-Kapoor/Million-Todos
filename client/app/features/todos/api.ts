@@ -1,39 +1,18 @@
+import { apiFetch } from "@/lib/apiClient";
 import type { Todo } from "@/types/todo";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-export const updateTodo = async (
+export const updateTodo = (
   todoId: string,
   data: Partial<Pick<Todo, "title" | "completed">>,
-) => {
-  const response = await fetch(`${BASE_URL}/todos/${todoId}`, {
+) =>
+  apiFetch<{ todo: Todo }>(`/todos/${todoId}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(data),
-  });
+    body: data,
+    fallbackErrorMessage: "Failed to update todo",
+  }).then(({ todo }) => todo);
 
-  if (!response.ok) {
-    const json = (await response.json().catch(() => null)) as {
-      message?: string;
-    } | null;
-    throw new Error(json?.message ?? "Failed to update todo");
-  }
-
-  const json = (await response.json()) as { data: { todo: Todo } };
-  return json.data.todo;
-};
-
-export const deleteTodo = async (todoId: string) => {
-  const response = await fetch(`${BASE_URL}/todos/${todoId}`, {
+export const deleteTodo = (todoId: string) =>
+  apiFetch<null>(`/todos/${todoId}`, {
     method: "DELETE",
-    credentials: "include",
+    fallbackErrorMessage: "Failed to delete todo",
   });
-
-  if (!response.ok) {
-    const json = (await response.json().catch(() => null)) as {
-      message?: string;
-    } | null;
-    throw new Error(json?.message ?? "Failed to delete todo");
-  }
-};

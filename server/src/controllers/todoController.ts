@@ -1,6 +1,11 @@
 import type { Request, Response } from "express";
 
 import { prisma } from "../config/db.js";
+import {
+  ApiError,
+  ApiResponse,
+  getErrorMessage,
+} from "../utils/apiResponse.js";
 
 export const getTodos = async (req: Request, res: Response) => {
   const BATCH_SIZE = 5000;
@@ -35,10 +40,9 @@ export const getTodos = async (req: Request, res: Response) => {
       if (todos.length < BATCH_SIZE) break;
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
+    const message = getErrorMessage(error);
     if (!res.headersSent) {
-      // Error before streaming started — can still set status
-      res.status(500).json({ state: "error", message });
+      new ApiError(500, message).send(res);
     } else {
       // Mid-stream error — send a sentinel error line so the client knows
       res.write(JSON.stringify({ error: message }) + "\n");
@@ -53,20 +57,17 @@ export const deleteTodo = async (req: Request, res: Response) => {
     const todoId = req.params.todoId as string;
     const userId = req.user?.userId;
 
-    if (!todoId)
-      return res.status(400).json({ message: "Todo id is required" });
+    if (!todoId) {
+      return new ApiError(400, "Todo id is required").send(res);
+    }
 
     await prisma.todo.delete({
       where: { id: todoId, userId },
     });
 
-    return res.status(200).json({
-      status: "success",
-      message: "Todo deleted successfully",
-    });
+    return new ApiResponse(200, null, "Todo deleted successfully").send(res);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return res.status(500).json({ state: "error", message });
+    return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };
 
@@ -76,7 +77,7 @@ export const updateTodo = async (req: Request, res: Response) => {
     const userId = req.user?.userId;
 
     if (!todoId) {
-      return res.status(400).json({ message: "Todo id is required" });
+      return new ApiError(400, "Todo id is required").send(res);
     }
 
     const todo = await prisma.todo.update({
@@ -84,14 +85,9 @@ export const updateTodo = async (req: Request, res: Response) => {
       data: req.body,
     });
 
-    return res.status(200).json({
-      status: "success",
-      message: "Todo updated successfully",
-      data: { todo },
-    });
+    return new ApiResponse(200, { todo }, "Todo updated successfully").send(res);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return res.status(500).json({ state: "error", message });
+    return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };
 
@@ -101,7 +97,7 @@ export const getSubtasksForTodo = async (req: Request, res: Response) => {
     const todoId = req.params.todoId as string;
 
     if (!todoId) {
-      return res.status(400).json({ message: "Todo id is required" });
+      return new ApiError(400, "Todo id is required").send(res);
     }
 
     const subtasks = await prisma.subtask.findMany({
@@ -114,20 +110,16 @@ export const getSubtasksForTodo = async (req: Request, res: Response) => {
       if (subtask.completed) completed += 1;
     }
 
-    return res.status(200).json({
-      status: "success",
-      data: {
-        subtasks,
-        counts: {
-          all: subtasks.length,
-          completed,
-          pending: subtasks.length - completed,
-        },
+    return new ApiResponse(200, {
+      subtasks,
+      counts: {
+        all: subtasks.length,
+        completed,
+        pending: subtasks.length - completed,
       },
-    });
+    }).send(res);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return res.status(500).json({ state: "error", message });
+    return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };
 
@@ -136,7 +128,7 @@ export const updateSubtask = async (req: Request, res: Response) => {
     const subtaskId = req.params.subtaskId as string;
 
     if (!subtaskId) {
-      return res.status(400).json({ message: "Subtask id is required" });
+      return new ApiError(400, "Subtask id is required").send(res);
     }
 
     const subtask = await prisma.subtask.update({
@@ -144,14 +136,9 @@ export const updateSubtask = async (req: Request, res: Response) => {
       data: req.body,
     });
 
-    return res.status(200).json({
-      status: "success",
-      message: "Subtask updated successfully",
-      data: { subtask },
-    });
+    return new ApiResponse(200, { subtask }, "Subtask updated successfully").send(res);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return res.status(500).json({ state: "error", message });
+    return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };
 
@@ -163,11 +150,11 @@ export const createSubtask = async (req: Request, res: Response) => {
       typeof req.body.title === "string" ? req.body.title.trim() : "";
 
     if (!todoId) {
-      return res.status(400).json({ message: "Todo id is required" });
+      return new ApiError(400, "Todo id is required").send(res);
     }
 
     if (!title) {
-      return res.status(400).json({ message: "Title is required" });
+      return new ApiError(400, "Title is required").send(res);
     }
 
     const todo = await prisma.todo.findFirst({
@@ -175,7 +162,7 @@ export const createSubtask = async (req: Request, res: Response) => {
     });
 
     if (!todo) {
-      return res.status(404).json({ message: "Todo not found" });
+      return new ApiError(404, "Todo not found").send(res);
     }
 
     const lastSubtask = await prisma.subtask.findFirst({
@@ -202,14 +189,9 @@ export const createSubtask = async (req: Request, res: Response) => {
       return created;
     });
 
-    return res.status(201).json({
-      status: "success",
-      message: "Subtask created successfully",
-      data: { subtask },
-    });
+    return new ApiResponse(201, { subtask }, "Subtask created successfully").send(res);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return res.status(500).json({ state: "error", message });
+    return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };
 
@@ -218,7 +200,7 @@ export const deleteSubtask = async (req: Request, res: Response) => {
     const subtaskId = req.params.subtaskId as string;
 
     if (!subtaskId) {
-      return res.status(400).json({ message: "Subtask id is required" });
+      return new ApiError(400, "Subtask id is required").send(res);
     }
 
     await prisma.$transaction(async (tx) => {
@@ -232,11 +214,8 @@ export const deleteSubtask = async (req: Request, res: Response) => {
       });
     });
 
-    return res
-      .status(200)
-      .json({ status: "success", message: "Subtask deleted successfully" });
+    return new ApiResponse(200, null, "Subtask deleted successfully").send(res);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return res.status(500).json({ state: "error", message });
+    return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };
