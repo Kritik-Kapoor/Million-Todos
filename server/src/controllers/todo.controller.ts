@@ -1,5 +1,4 @@
 import type { Request, Response } from "express";
-
 import { prisma } from "../config/db.js";
 import {
   ApiError,
@@ -14,7 +13,7 @@ export const getTodos = async (req: Request, res: Response) => {
   res.setHeader("Transfer-Encoding", "chunked");
   res.setHeader("Cache-Control", "no-cache");
 
-  const userId = req.user?.userId;
+  const userId = req.user!.userId;
   let cursor: number | undefined = undefined;
   type TodoRow = Awaited<ReturnType<typeof prisma.todo.findMany>>[number];
   let todos: TodoRow[] = [];
@@ -74,7 +73,7 @@ export const deleteTodo = async (req: Request, res: Response) => {
 export const updateTodo = async (req: Request, res: Response) => {
   try {
     const todoId = req.params.todoId as string;
-    const userId = req.user?.userId;
+    const userId = req.user!.userId;
 
     if (!todoId) {
       return new ApiError(400, "Todo id is required").send(res);
@@ -85,7 +84,9 @@ export const updateTodo = async (req: Request, res: Response) => {
       data: req.body,
     });
 
-    return new ApiResponse(200, { todo }, "Todo updated successfully").send(res);
+    return new ApiResponse(200, { todo }, "Todo updated successfully").send(
+      res,
+    );
   } catch (error) {
     return new ApiError(500, getErrorMessage(error)).send(res);
   }
@@ -136,7 +137,11 @@ export const updateSubtask = async (req: Request, res: Response) => {
       data: req.body,
     });
 
-    return new ApiResponse(200, { subtask }, "Subtask updated successfully").send(res);
+    return new ApiResponse(
+      200,
+      { subtask },
+      "Subtask updated successfully",
+    ).send(res);
   } catch (error) {
     return new ApiError(500, getErrorMessage(error)).send(res);
   }
@@ -145,7 +150,7 @@ export const updateSubtask = async (req: Request, res: Response) => {
 export const createSubtask = async (req: Request, res: Response) => {
   try {
     const todoId = req.params.todoId as string;
-    const userId = req.user?.userId;
+    const userId = req.user!.userId;
     const title =
       typeof req.body.title === "string" ? req.body.title.trim() : "";
 
@@ -189,7 +194,11 @@ export const createSubtask = async (req: Request, res: Response) => {
       return created;
     });
 
-    return new ApiResponse(201, { subtask }, "Subtask created successfully").send(res);
+    return new ApiResponse(
+      201,
+      { subtask },
+      "Subtask created successfully",
+    ).send(res);
   } catch (error) {
     return new ApiError(500, getErrorMessage(error)).send(res);
   }

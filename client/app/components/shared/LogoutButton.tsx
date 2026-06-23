@@ -15,8 +15,7 @@ const LogoutButton = () => {
   return (
     <Button
       type="button"
-      variant="outline"
-      size="sm"
+      variant="destructive"
       className="rounded-xl"
       disabled={loading}
       onClick={() => logout()}

@@ -11,8 +11,11 @@ model User {
   username String
   email String @unique
   password String
+  dueDateReminder Boolean @default(true)
+  dailyDigest Boolean @default(false)
   createdAt DateTime @default(now())
   todos Todo[]
+  labels Label[]
 }
 
 model Todo {
@@ -27,6 +30,7 @@ model Todo {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   subtasks Subtask[]
   subtaskCount Int @default(0)
+  labels TodoLabel[]
   @@index([userId])
 }
 
@@ -40,4 +44,24 @@ model Subtask {
   updatedAt DateTime @updatedAt
   todo Todo @relation(fields: [todoId], references: [id], onDelete: Cascade)
   @@index([todoId, position])
+}
+
+model Label {
+  id String @id @default(uuid())
+  userId String
+  name String
+  color String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  todos TodoLabel[]
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model TodoLabel {
+  todoId String
+  labelId String
+  todo Todo @relation(fields: [todoId], references: [id], onDelete: Cascade)
+  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  @@id([todoId, labelId])
+  @@index([labelId])
 }

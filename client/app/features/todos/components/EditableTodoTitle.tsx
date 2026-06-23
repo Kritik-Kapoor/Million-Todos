@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils/tailwindMerge";
+import { Pen } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 type EditableTodoTitleProps = {
   title: string;
@@ -75,16 +77,17 @@ const EditableTodoTitle = ({
   }
 
   return (
-    <button
-      type="button"
-      onClick={startEdit}
+    <div
       className={cn(
-        "w-full truncate text-left text-lg font-semibold hover:opacity-80",
+        "group w-full flex items-center gap-3 truncate text-left text-lg font-semibold hover:opacity-80",
         className,
       )}
     >
-      {title}
-    </button>
+      {title}{" "}
+      <Button variant="ghost" size="icon" onClick={startEdit}>
+        <Pen className="size-4 text-primary hidden group-hover:block" />
+      </Button>
+    </div>
   );
 };
 

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import UserBar from "@/components/UserBar";
+import UserBar from "@/components/shared/UserBar";
 
 export default function TodosLayout({
   children,

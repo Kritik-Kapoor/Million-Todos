@@ -128,3 +128,25 @@
     @apply font-sans;
   }
 }
+
+[data-todo-card] {
+  padding: 1rem;
+}
+
+[data-todo-title] {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+html[data-density="compact"] [data-todo-card] {
+  padding: 0rem;
+}
+
+html[data-density="compact"] [data-todo-title] {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+html[data-density="compact"] [data-todo-subtitle] {
+  display: none;
+}

@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/apiClient";
+import { apiFetch } from "@/lib/utils/apiClient";
 import type { Subtask, SubtasksResponse } from "@/types/todo";
 
 export const fetchSubtasks = (

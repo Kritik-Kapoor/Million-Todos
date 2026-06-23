@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Circle, GripVertical, Trash2 } from "lucide-react";
 
 import { DragHandleRef } from "@/components/shared/VirtualList";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils/tailwindMerge";
 import { Subtask } from "@/types/todo";
 import { Button } from "@/components/ui/button";
 

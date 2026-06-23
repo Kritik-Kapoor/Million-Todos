@@ -10,14 +10,18 @@ export const authenticateUser = (
   try {
     const token = req.cookies["million-todos-token"];
 
-    if (!token) {
-      return new ApiError(401, "Unauthorized user, No token provided").send(res);
-    }
+    if (!token)
+      return new ApiError(401, "Unauthorized user, No token provided").send(
+        res,
+      );
 
     const decoded = jwt.verify(
       token,
       process.env.JWT_SECRET!,
     ) as jwt.JwtPayload;
+
+    if (!decoded.userId)
+      return new ApiError(401, "Unauthorized user, Invalid token").send(res);
 
     req.user = {
       userId: decoded.userId,

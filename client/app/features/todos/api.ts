@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/apiClient";
+import { apiFetch } from "@/lib/utils/apiClient";
 import type { Todo } from "@/types/todo";
 
 export const updateTodo = (

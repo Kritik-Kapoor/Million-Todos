@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, DM_Sans } from "next/font/google";
 import "./globals.css";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils/tailwindMerge";
 import { Toaster } from "sonner";
+import { UiSettingsProvider } from "@/features/settings/context/UiSettingsContext";
 import { ReactQueryProvider } from "./providers/reactQueryProvider";
 
 const geistMonoHeading = Geist_Mono({
@@ -46,7 +47,9 @@ export default function RootLayout({
       )}
     >
       <body className="min-h-full flex flex-col">
-        <ReactQueryProvider>{children}</ReactQueryProvider>
+        <ReactQueryProvider>
+          <UiSettingsProvider>{children}</UiSettingsProvider>
+        </ReactQueryProvider>
         <Toaster richColors />
       </body>
     </html>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils/tailwindMerge";
 import { useSortable } from "@dnd-kit/react/sortable";
 
 // Limit the spacer height to 15 million pixels to avoid browser issues

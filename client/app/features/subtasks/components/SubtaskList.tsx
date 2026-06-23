@@ -22,7 +22,7 @@ type SubtaskListProps = {
 };
 
 const SubtaskList = ({ todoId, onSubtaskCountChange }: SubtaskListProps) => {
-  const newTitleInputRef = useRef<HTMLInputElement>(null);
+  const subtaskInputRef = useRef<HTMLInputElement>(null);
   const [newTitle, setNewTitle] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -87,7 +87,7 @@ const SubtaskList = ({ todoId, onSubtaskCountChange }: SubtaskListProps) => {
       )}
       <form onSubmit={handleSubmit} className="flex gap-2 mb-3">
         <Input
-          ref={newTitleInputRef}
+          ref={subtaskInputRef}
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
           placeholder="Add a subtask…"
@@ -113,7 +113,7 @@ const SubtaskList = ({ todoId, onSubtaskCountChange }: SubtaskListProps) => {
           description="Break this todo into smaller steps by adding your first subtask."
           action={{
             label: "Add subtask",
-            onClick: () => newTitleInputRef.current?.focus(),
+            onClick: () => subtaskInputRef.current?.focus(),
           }}
           className="min-h-[400px] rounded-xl border border-dashed border-border/60"
         />

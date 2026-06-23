@@ -4,12 +4,13 @@ import { useState } from "react";
 import { CheckCircle2, Circle, Trash2, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils/tailwindMerge";
 import { VirtualList } from "@/components/shared/VirtualList";
 import SheetDialog from "@/components/shared/SheetDialog";
 import SubtaskList from "@/features/subtasks/components/SubtaskList";
 import EditableTodoTitle from "./EditableTodoTitle";
 import type { Todo } from "@/types/todo";
+import { useUiSettings } from "@/features/settings/context/UiSettingsContext";
 
 type TodoListProps = {
   todos: Todo[];
@@ -20,6 +21,7 @@ type TodoListProps = {
 };
 
 const ROW_HEIGHT = 80;
+const COMPACT_ROW_HEIGHT = 56;
 const CONTAINER_HEIGHT = 500;
 
 const TodoList = ({
@@ -29,6 +31,8 @@ const TodoList = ({
   onUpdateTodoTitle,
   handleSubtaskCountChange,
 }: TodoListProps) => {
+  const { density } = useUiSettings();
+  const itemHeight = density === "compact" ? COMPACT_ROW_HEIGHT : ROW_HEIGHT;
   const [selectedTodo, setSelectedTodo] = useState<Todo | null>(null);
 
   const handleTitleSave = (title: string) => {
@@ -57,7 +61,7 @@ const TodoList = ({
     <>
       <VirtualList
         items={todos}
-        itemHeight={ROW_HEIGHT}
+        itemHeight={itemHeight}
         height={CONTAINER_HEIGHT}
         className="rounded-2xl"
         renderItem={(todo, _index, style) => (
@@ -76,8 +80,9 @@ const TodoList = ({
                 "h-full cursor-pointer rounded-2xl border border-border/70 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md",
                 todo.completed && "bg-muted/50",
               )}
+              data-todo-card=""
             >
-              <div className="flex h-full items-center gap-2 px-4">
+              <div className="flex h-full items-center gap-2">
                 <Button
                   type="button"
                   variant="ghost"
@@ -103,14 +108,18 @@ const TodoList = ({
 
                 <div className="min-w-0 flex-1">
                   <p
+                    data-todo-title
                     className={cn(
-                      "truncate text-sm font-medium",
+                      "truncate font-medium",
                       todo.completed && "text-muted-foreground line-through",
                     )}
                   >
                     {todo.title}
                   </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
+                  <p
+                    data-todo-subtitle
+                    className="mt-0.5 text-muted-foreground"
+                  >
                     {todo.completed ? "Completed" : "Ready to work on"}
                   </p>
                 </div>
