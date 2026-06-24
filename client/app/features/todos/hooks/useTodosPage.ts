@@ -1,25 +1,78 @@
 "use client";
 
-import { SubmitEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import type { Todo } from "@/types/todo";
-import { deleteTodo, updateTodo } from "../api";
+import { createTodo, deleteTodo, updateTodo } from "../api";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { labelQueryKeys } from "@/features/settings/constants";
+import { fetchLabels } from "@/features/settings/api";
+import getErrorMessage from "@/lib/utils/getErrorMessage";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm, useWatch } from "react-hook-form";
+import z from "zod";
+import { LabelItem } from "@/features/settings/types";
+import { toast } from "sonner";
+import { useTodoStore } from "../store";
+
+const createTodoSchema = z.object({
+  title: z.string().trim().min(1, "Title is required"),
+  selectedLabels: z.array(z.custom<SelectOption>()).optional(),
+  dueDate: z.date().optional(),
+});
+
+type CreateTodoValues = z.infer<typeof createTodoSchema>;
+
+function labelToOption(label: LabelItem): SelectOption {
+  return { value: label.id, label: label.name, color: label.color };
+}
 
 export function useTodosPage() {
-  const [todos, setTodos] = useState<Todo[]>([]);
-  const [newTodoTitle, setNewTodoTitle] = useState("");
+  const {
+    addTodoBatch,
+    addTodo,
+    replaceTodo,
+    removeTodo,
+    updateTodo: updateTodoInStore,
+    incrementSubtaskCount,
+  } = useTodoStore();
+
+  const todoIds = useTodoStore((state) => state.allIds);
+  const todoById = useTodoStore((state) => state.byId);
+  const completedCount = useTodoStore((state) => state.completedCount);
+  const activeCount = todoIds.length - completedCount;
+
+  const form = useForm<CreateTodoValues>({
+    resolver: zodResolver(createTodoSchema),
+    defaultValues: { title: "", selectedLabels: [], dueDate: undefined },
+  });
+
+  const {
+    data: labels,
+    isPending: fetchingLabels,
+    error: labelsError,
+  } = useQuery({
+    queryKey: labelQueryKeys.all,
+    queryFn: ({ signal }) => fetchLabels(signal),
+  });
+
+  const labelOptions = useMemo(
+    () => labels?.map(labelToOption) ?? [],
+    [labels],
+  );
+
+  const selectedLabels = useWatch({
+    control: form.control,
+    name: "selectedLabels",
+  });
 
   useEffect(() => {
     const controller = new AbortController();
 
     const streamTodos = async () => {
-      let todosBatch: Todo[] = [];
       try {
         const response = await fetch(
           `${process.env.NEXT_PUBLIC_API_BASE_URL}/todos`,
-          {
-            credentials: "include",
-            signal: controller.signal,
-          },
+          { credentials: "include", signal: controller.signal },
         );
 
         if (!response.ok || !response.body) return;
@@ -27,20 +80,25 @@ export function useTodosPage() {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
+        let todosBatch: Todo[] = [];
+
+        const flushBatch = () => {
+          if (todosBatch.length === 0) return;
+          const batch = todosBatch;
+          todosBatch = [];
+          addTodoBatch(batch);
+        };
 
         while (true) {
           const { done, value } = await reader.read();
 
           if (done) {
-            if (todosBatch.length > 0)
-              setTodos((prev) => [...prev, ...todosBatch]);
+            flushBatch();
             break;
           }
 
-          // Wait for the next chunk of data, since the current chunk might have incomplete lines.
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n");
-          // Last element may be an incomplete chunk, keep it in the buffer so that it can be processed in the next iteration
           buffer = lines.pop() ?? "";
 
           for (const line of lines) {
@@ -48,30 +106,15 @@ export function useTodosPage() {
             try {
               const parsed = JSON.parse(line) as Todo & { error?: string };
               if (parsed.error) {
-                // Need to show this error in UI
                 console.error("[stream] server error:", parsed.error);
-                // Flush whatever we have so the UI isn't left empty
-                if (todosBatch.length > 0) {
-                  const batch = todosBatch;
-                  todosBatch = [];
-                  setTodos((prev) => [...prev, ...batch]);
-                }
+                flushBatch();
                 return;
               }
               todosBatch.push(parsed);
+              if (todosBatch.length >= 10_000) flushBatch();
             } catch {
               console.error("[stream] failed to parse line:", line);
             }
-          }
-
-          // Do setState in batches to avoid re-rendering the entire list 1M times.
-          // Doing individual setState calls for each todo would be too slow and will cause the UI to freeze and crash for large lists.
-          // Doing individual setState calls will equate to 1M re-renders.
-          // Whereas with batching: 1M/10k -> 100 batches -> 100 re-renders.
-          if (todosBatch.length >= 10000) {
-            const batch = todosBatch;
-            todosBatch = [];
-            setTodos((prev) => [...prev, ...batch]);
           }
         }
       } catch (err) {
@@ -83,103 +126,127 @@ export function useTodosPage() {
 
     streamTodos();
     return () => controller.abort();
-  }, []);
+  }, [addTodoBatch]);
 
-  const completedCount = useMemo(
-    () => todos.filter((todo) => todo.completed).length,
-    [todos],
-  );
-
-  const activeCount = useMemo(
-    () => todos.length - completedCount,
-    [todos, completedCount],
-  );
+  const createTodoMutation = useMutation({
+    mutationFn: createTodo,
+    onMutate: (data) => {
+      const tempId = crypto.randomUUID();
+      addTodo({
+        id: tempId,
+        title: data.title,
+        completed: false,
+        subtaskCount: 0,
+        dueDate: data.dueDate?.toISOString() ?? null,
+      });
+      return { tempId };
+    },
+    onSuccess: (data, _, ctx) => {
+      replaceTodo(ctx.tempId, data);
+      form.reset();
+    },
+    onError: (error, _, ctx) => {
+      if (ctx?.tempId) removeTodo(ctx.tempId);
+      toast.error(getErrorMessage(error));
+    },
+  });
 
   const handleCreateTodo = useCallback(
-    (event: SubmitEvent<HTMLFormElement>) => {
-      event.preventDefault();
+    (data: CreateTodoValues) => {
+      const { title, selectedLabels, dueDate } = data;
+      const trimmedTitle = title.trim();
+      if (!trimmedTitle) return toast.error("Title is required");
 
-      const title = newTodoTitle.trim();
-      if (!title) return;
-
-      setTodos((currentTodos) => [
-        {
-          id: crypto.randomUUID(),
-          title,
-          completed: false,
-          subtaskCount: 0,
-        },
-        ...currentTodos,
-      ]);
-      setNewTodoTitle("");
+      createTodoMutation.mutate({
+        title: trimmedTitle,
+        labels: selectedLabels?.map((o) => o.value),
+        dueDate: dueDate ? new Date(dueDate) : undefined,
+      });
     },
-    [newTodoTitle],
+    [createTodoMutation],
   );
 
-  const handleToggleTodo = useCallback((id: string, completed: boolean) => {
-    const newCompleted = !completed;
+  const toggleTodoMutation = useMutation({
+    mutationFn: (data: { id: string; completed: boolean }) =>
+      updateTodo(data.id, { completed: data.completed }),
+    onMutate: (data) => {
+      updateTodoInStore(data.id, { completed: data.completed });
+      return { id: data.id, completed: data.completed };
+    },
+    onError: (error, _, ctx) => {
+      if (ctx?.id) updateTodoInStore(ctx.id, { completed: !ctx.completed });
+      toast.error(getErrorMessage(error));
+    },
+  });
 
-    setTodos((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, completed: newCompleted } : t)),
-    );
+  const handleToggleTodo = useCallback(
+    (id: string, currentCompletionStatus: boolean) => {
+      if (!id) return toast.error("Failed to update todo completion status");
+      toggleTodoMutation.mutate({ id, completed: !currentCompletionStatus });
+    },
+    [toggleTodoMutation],
+  );
 
-    updateTodo(id, { completed: newCompleted }).catch(() => {
-      setTodos((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, completed } : t)),
-      );
-    });
-  }, []);
+  const deleteTodoMutation = useMutation({
+    mutationFn: deleteTodo,
+    onMutate: (id) => {
+      const todoData = todoById[id];
+      removeTodo(id);
+      return { id, todoData };
+    },
+    onError: (error, _, ctx) => {
+      if (ctx?.id) addTodo(ctx.todoData);
+      toast.error(getErrorMessage(error));
+    },
+  });
 
-  const handleDeleteTodo = useCallback((id: string) => {
-    setTodos((prev) => prev.filter((todo) => todo.id !== id));
-    deleteTodo(id).catch((err) => {
-      console.error("[Todos] failed to delete todo:", err);
-    });
-  }, []);
+  const updateTodoTitleMutation = useMutation({
+    mutationFn: (data: { id: string; title: string }) =>
+      updateTodo(data.id, { title: data.title }),
+    onMutate: (data) => {
+      const previousTitle = todoById[data.id].title;
+      updateTodoInStore(data.id, { title: data.title });
+      return { id: data.id, previousTitle };
+    },
+    onError: (error, _, ctx) => {
+      if (ctx?.id) updateTodoInStore(ctx.id, { title: ctx.previousTitle });
+      toast.error(getErrorMessage(error));
+    },
+  });
 
   const handleUpdateTodoTitle = useCallback(
     (id: string, title: string, previousTitle: string) => {
-      const trimmed = title.trim();
-      if (!trimmed || trimmed === previousTitle) return;
-
-      setTodos((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, title: trimmed } : t)),
-      );
-
-      updateTodo(id, { title: trimmed }).catch(() => {
-        setTodos((prev) =>
-          prev.map((t) => (t.id === id ? { ...t, title: previousTitle } : t)),
-        );
-      });
+      const trimmedTitle = title.trim();
+      if (!trimmedTitle || trimmedTitle === previousTitle) return;
+      updateTodoTitleMutation.mutate({ id, title: trimmedTitle });
     },
-    [],
+    [updateTodoTitleMutation],
   );
 
   const handleSubtaskCountChange = useCallback(
     (todoId: string, value: number) => {
-      setTodos((prev) =>
-        prev.map((t) =>
-          t.id === todoId
-            ? { ...t, subtaskCount: Math.max(0, t.subtaskCount + value) }
-            : t,
-        ),
-      );
+      if (!todoId) return;
+      incrementSubtaskCount(todoId, value);
     },
-    [],
+    [incrementSubtaskCount],
   );
 
   return {
     state: {
-      todos,
-      newTodoTitle,
+      form,
+      labelOptions,
+      selectedLabels,
+      fetchingLabels,
+      labelsError: labelsError ? getErrorMessage(labelsError) : null,
+      todoIds,
       completedCount,
       activeCount,
+      isCreatingTodo: createTodoMutation.isPending,
     },
     actions: {
-      setNewTodoTitle,
       handleCreateTodo,
       handleToggleTodo,
-      handleDeleteTodo,
+      handleDeleteTodo: deleteTodoMutation.mutate,
       handleUpdateTodoTitle,
       handleSubtaskCountChange,
     },

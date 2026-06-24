@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   createSubtask,
+  createTodo,
   deleteSubtask,
   deleteTodo,
   getSubtasksForTodo,
@@ -14,6 +15,7 @@ const router = Router();
 
 // TODO Routes
 router.get("/", authenticateUser, getTodos);
+router.post("/", authenticateUser, createTodo);
 router.post("/:todoId", authenticateUser, updateTodo);
 router.delete("/:todoId", authenticateUser, deleteTodo);
 

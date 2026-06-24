@@ -1,19 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Circle, Trash2, Layers } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { CheckCircle2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils/tailwindMerge";
-import { VirtualList } from "@/components/shared/VirtualList";
 import SheetDialog from "@/components/shared/SheetDialog";
 import SubtaskList from "@/features/subtasks/components/SubtaskList";
 import EditableTodoTitle from "./EditableTodoTitle";
-import type { Todo } from "@/types/todo";
 import { useUiSettings } from "@/features/settings/context/UiSettingsContext";
+import TodoRow from "./TodoRow";
+import IndexedVirtualList from "@/components/shared/IndexedVirtualList";
+import { useTodoStore } from "../store";
 
 type TodoListProps = {
-  todos: Todo[];
+  todoIds: string[];
   onToggleTodo: (id: string, completed: boolean) => void;
   onDeleteTodo: (id: string) => void;
   onUpdateTodoTitle: (id: string, title: string, previousTitle: string) => void;
@@ -25,7 +24,7 @@ const COMPACT_ROW_HEIGHT = 56;
 const CONTAINER_HEIGHT = 500;
 
 const TodoList = ({
-  todos,
+  todoIds,
   onToggleTodo,
   onDeleteTodo,
   onUpdateTodoTitle,
@@ -33,15 +32,19 @@ const TodoList = ({
 }: TodoListProps) => {
   const { density } = useUiSettings();
   const itemHeight = density === "compact" ? COMPACT_ROW_HEIGHT : ROW_HEIGHT;
-  const [selectedTodo, setSelectedTodo] = useState<Todo | null>(null);
+
+  const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null);
+
+  const selectedTodo = useTodoStore((state) =>
+    selectedTodoId ? state.byId[selectedTodoId] : null,
+  );
 
   const handleTitleSave = (title: string) => {
     if (!selectedTodo) return;
     onUpdateTodoTitle(selectedTodo.id, title, selectedTodo.title);
-    setSelectedTodo((prev) => (prev ? { ...prev, title } : null));
   };
 
-  if (todos.length === 0) {
+  if (todoIds.length === 0) {
     return (
       <Card className="items-center rounded-2xl border-dashed p-10 text-center">
         <div className="rounded-full bg-muted p-3">
@@ -59,101 +62,30 @@ const TodoList = ({
 
   return (
     <>
-      <VirtualList
-        items={todos}
+      <IndexedVirtualList
+        itemCount={todoIds.length}
         itemHeight={itemHeight}
         height={CONTAINER_HEIGHT}
         className="rounded-2xl"
-        renderItem={(todo, _index, style) => (
-          <div key={todo.id} style={style} className="px-0.5 py-1">
-            <Card
-              role="button"
-              tabIndex={0}
-              onClick={() => setSelectedTodo(todo)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  setSelectedTodo(todo);
-                }
-              }}
-              className={cn(
-                "h-full cursor-pointer rounded-2xl border border-border/70 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md",
-                todo.completed && "bg-muted/50",
-              )}
-              data-todo-card=""
-            >
-              <div className="flex h-full items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={
-                    todo.completed ? "Mark todo incomplete" : "Complete todo"
-                  }
-                  className={cn(
-                    "size-9 shrink-0 rounded-full",
-                    todo.completed && "text-emerald-600",
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleTodo(todo.id, todo.completed);
-                  }}
-                >
-                  {todo.completed ? (
-                    <CheckCircle2 className="size-5" />
-                  ) : (
-                    <Circle className="size-5" />
-                  )}
-                </Button>
+        renderItem={(index, style) => {
+          const todoId = todoIds[index];
 
-                <div className="min-w-0 flex-1">
-                  <p
-                    data-todo-title
-                    className={cn(
-                      "truncate font-medium",
-                      todo.completed && "text-muted-foreground line-through",
-                    )}
-                  >
-                    {todo.title}
-                  </p>
-                  <p
-                    data-todo-subtitle
-                    className="mt-0.5 text-muted-foreground"
-                  >
-                    {todo.completed ? "Completed" : "Ready to work on"}
-                  </p>
-                </div>
-
-                <div className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-muted-foreground">
-                  <Layers className="size-3.5" />
-                  <span>
-                    {todo.subtaskCount.toLocaleString()}{" "}
-                    {todo.subtaskCount === 1 ? "subtask" : "subtasks"}
-                  </span>
-                </div>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Delete todo"
-                  className="size-9 shrink-0 rounded-full text-muted-foreground hover:text-destructive"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteTodo(todo.id);
-                  }}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            </Card>
-          </div>
-        )}
+          return (
+            <TodoRow
+              key={todoId}
+              id={todoId}
+              style={style}
+              onToggleTodo={onToggleTodo}
+              onDeleteTodo={onDeleteTodo}
+              onSelectTodo={() => setSelectedTodoId(todoId)}
+            />
+          );
+        }}
       />
 
       <SheetDialog
         isOpen={selectedTodo !== null}
-        onClose={() => setSelectedTodo(null)}
+        onClose={() => setSelectedTodoId(null)}
         title={
           selectedTodo ? (
             <EditableTodoTitle
@@ -172,14 +104,6 @@ const TodoList = ({
             todoId={selectedTodo.id}
             onSubtaskCountChange={(value) => {
               handleSubtaskCountChange(selectedTodo.id, value);
-              setSelectedTodo((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      subtaskCount: Math.max(0, prev.subtaskCount + value),
-                    }
-                  : null,
-              );
             }}
           />
         )}

@@ -5,6 +5,12 @@ declare global {
     dueDateReminder: boolean;
     dailyDigest: boolean;
   };
+
+  type SelectOption = {
+    value: string;
+    label: string;
+    [key: string]: unknown;
+  };
 }
 
 export {};

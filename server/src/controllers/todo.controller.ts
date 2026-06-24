@@ -51,6 +51,58 @@ export const getTodos = async (req: Request, res: Response) => {
   }
 };
 
+export const createTodo = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { title, labels, dueDate } = req.body as {
+      title: string;
+      dueDate?: string;
+      labels?: string[];
+    };
+
+    const trimmedTitle = typeof title === "string" ? title.trim() : "";
+    if (!trimmedTitle) {
+      return new ApiError(400, "Title is required").send(res);
+    }
+
+    const labelIds = Array.isArray(labels)
+      ? [...new Set(labels.filter((id) => typeof id === "string" && id))]
+      : [];
+
+    if (labelIds.length > 0) {
+      const ownedLabels = await prisma.label.findMany({
+        where: { userId, id: { in: labelIds } },
+        select: { id: true },
+      });
+
+      if (ownedLabels.length !== labelIds.length) {
+        return new ApiError(400, "One or more labels are invalid").send(res);
+      }
+    }
+
+    const todo = await prisma.todo.create({
+      data: {
+        userId,
+        title: trimmedTitle,
+        ...(dueDate && {
+          dueDate: new Date(dueDate),
+        }),
+        ...(labelIds.length > 0 && {
+          labels: {
+            create: labelIds.map((labelId) => ({
+              label: { connect: { id: labelId } },
+            })),
+          },
+        }),
+      },
+    });
+
+    return new ApiResponse(201, todo, "Todo created successfully").send(res);
+  } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
 export const deleteTodo = async (req: Request, res: Response) => {
   try {
     const todoId = req.params.todoId as string;
@@ -84,9 +136,7 @@ export const updateTodo = async (req: Request, res: Response) => {
       data: req.body,
     });
 
-    return new ApiResponse(200, { todo }, "Todo updated successfully").send(
-      res,
-    );
+    return new ApiResponse(200, todo, "Todo updated successfully").send(res);
   } catch (error) {
     return new ApiError(500, getErrorMessage(error)).send(res);
   }

@@ -12,6 +12,7 @@ export type Todo = {
   title: string;
   completed: boolean;
   subtaskCount: number;
+  dueDate?: string | null;
 };
 
 export type SubtaskCounts = {
