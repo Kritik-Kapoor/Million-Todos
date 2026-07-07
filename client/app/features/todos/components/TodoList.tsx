@@ -36,7 +36,7 @@ const TodoList = ({
   const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null);
 
   const selectedTodo = useTodoStore((state) =>
-    selectedTodoId ? state.byId[selectedTodoId] : null,
+    selectedTodoId ? (state.byId.get(selectedTodoId) ?? null) : null,
   );
 
   const handleTitleSave = (title: string) => {

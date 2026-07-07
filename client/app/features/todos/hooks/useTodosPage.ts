@@ -1,8 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Todo } from "@/types/todo";
-import { createTodo, deleteTodo, updateTodo } from "../api";
+import {
+  buildFilterParams,
+  createTodo,
+  deleteTodo,
+  hasActiveFilters,
+  updateTodo,
+} from "../api";
+import type { TodoFilters } from "../api";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { labelQueryKeys } from "@/features/settings/constants";
 import { fetchLabels } from "@/features/settings/api";
@@ -36,10 +43,20 @@ export function useTodosPage() {
     incrementSubtaskCount,
   } = useTodoStore();
 
-  const todoIds = useTodoStore((state) => state.allIds);
-  const todoById = useTodoStore((state) => state.byId);
+  useTodoStore((state) => state.version);
+  const todoIds = useTodoStore.getState().allIds;
   const completedCount = useTodoStore((state) => state.completedCount);
   const activeCount = todoIds.length - completedCount;
+
+  // ── Filter state ──
+  const [filters, setFiltersState] = useState<TodoFilters>({});
+  // null = not filtering; string[] = filtered IDs (may be empty if no matches)
+  const [filteredTodoIds, setFilteredTodoIds] = useState<string[] | null>(null);
+  const [isLoadingFilters, setIsLoadingFilters] = useState(false);
+  const filterAbortRef = useRef<AbortController | null>(null);
+
+  const isFiltering = filteredTodoIds !== null;
+  const displayTodoIds = isFiltering ? filteredTodoIds : todoIds;
 
   const form = useForm<CreateTodoValues>({
     resolver: zodResolver(createTodoSchema),
@@ -190,12 +207,12 @@ export function useTodosPage() {
   const deleteTodoMutation = useMutation({
     mutationFn: deleteTodo,
     onMutate: (id) => {
-      const todoData = todoById[id];
+      const todoData = useTodoStore.getState().byId.get(id);
       removeTodo(id);
       return { id, todoData };
     },
     onError: (error, _, ctx) => {
-      if (ctx?.id) addTodo(ctx.todoData);
+      if (ctx?.todoData) addTodo(ctx.todoData);
       toast.error(getErrorMessage(error));
     },
   });
@@ -204,12 +221,13 @@ export function useTodosPage() {
     mutationFn: (data: { id: string; title: string }) =>
       updateTodo(data.id, { title: data.title }),
     onMutate: (data) => {
-      const previousTitle = todoById[data.id].title;
+      const previousTitle = useTodoStore.getState().byId.get(data.id)?.title;
       updateTodoInStore(data.id, { title: data.title });
       return { id: data.id, previousTitle };
     },
     onError: (error, _, ctx) => {
-      if (ctx?.id) updateTodoInStore(ctx.id, { title: ctx.previousTitle });
+      if (ctx?.id && ctx.previousTitle !== undefined)
+        updateTodoInStore(ctx.id, { title: ctx.previousTitle });
       toast.error(getErrorMessage(error));
     },
   });
@@ -231,6 +249,93 @@ export function useTodosPage() {
     [incrementSubtaskCount],
   );
 
+  // ── Filter actions ──
+  const applyFilters = useCallback(
+    async (newFilters: TodoFilters) => {
+      setFiltersState(newFilters);
+
+      if (!hasActiveFilters(newFilters)) {
+        filterAbortRef.current?.abort();
+        setFilteredTodoIds(null);
+        setIsLoadingFilters(false);
+        return;
+      }
+
+      filterAbortRef.current?.abort();
+      const controller = new AbortController();
+      filterAbortRef.current = controller;
+
+      setIsLoadingFilters(true);
+      setFilteredTodoIds([]); // enter filtering mode immediately (shows empty state while loading)
+
+      try {
+        const params = buildFilterParams(newFilters);
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/todos/filter?${params}`,
+          { credentials: "include", signal: controller.signal },
+        );
+
+        if (!response.ok || !response.body) {
+          toast.error("Failed to apply filters");
+          setFilteredTodoIds(null);
+          return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        const ids: string[] = [];
+
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) {
+            setFilteredTodoIds([...ids]);
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const parsed = JSON.parse(line) as Todo & { error?: string };
+              if (parsed.error) {
+                toast.error("Filter error: " + parsed.error);
+                setFilteredTodoIds([...ids]);
+                return;
+              }
+              ids.push(parsed.id);
+              // Fallback if filter runs before initial getTodos stream reaches this todo
+              if (!useTodoStore.getState().byId.get(parsed.id)) {
+                addTodo(parsed);
+              }
+            } catch {
+              console.error("[filter stream] failed to parse line:", line);
+            }
+          }
+        }
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          toast.error("Failed to apply filters");
+          setFilteredTodoIds(null);
+        }
+      } finally {
+        if (!controller.signal.aborted) setIsLoadingFilters(false);
+      }
+    },
+    [addTodo],
+  );
+
+  const clearFilters = useCallback(() => {
+    filterAbortRef.current?.abort();
+    setFiltersState({});
+    setFilteredTodoIds(null);
+    setIsLoadingFilters(false);
+  }, []);
+
   return {
     state: {
       form,
@@ -238,10 +343,13 @@ export function useTodosPage() {
       selectedLabels,
       fetchingLabels,
       labelsError: labelsError ? getErrorMessage(labelsError) : null,
-      todoIds,
+      todoIds: displayTodoIds,
       completedCount,
       activeCount,
       isCreatingTodo: createTodoMutation.isPending,
+      isFiltering,
+      isLoadingFilters,
+      filters,
     },
     actions: {
       handleCreateTodo,
@@ -249,6 +357,8 @@ export function useTodosPage() {
       handleDeleteTodo: deleteTodoMutation.mutate,
       handleUpdateTodoTitle,
       handleSubtaskCountChange,
+      applyFilters,
+      clearFilters,
     },
   };
 }

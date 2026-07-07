@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils/tailwindMerge";
 import { CheckCircle2, Circle, Layers, Trash2 } from "lucide-react";
 import DueDateBadge from "./DueDateBadge";
+import TodoLabelBadges from "./TodoLabelBadges";
 import { useTodoStore } from "../store";
 
 const TodoRow = ({
@@ -18,7 +19,10 @@ const TodoRow = ({
   onDeleteTodo: (id: string) => void;
   onSelectTodo: () => void;
 }) => {
-  const todo = useTodoStore((state) => state.byId[id]);
+  useTodoStore((state) => state.version);
+  const todo = useTodoStore.getState().byId.get(id);
+
+  if (!todo) return <div style={style} />;
 
   return (
     <div key={todo.id} style={style} className="px-0.5 py-1">
@@ -63,23 +67,24 @@ const TodoRow = ({
           </Button>
 
           <div className="min-w-0 flex-1">
-            <p
-              data-todo-title
-              className={cn(
-                "truncate font-medium",
-                todo.completed && "text-muted-foreground line-through",
+            <div className="flex items-center gap-2">
+              <p
+                data-todo-title
+                className={cn(
+                  "truncate font-medium",
+                  todo.completed && "text-muted-foreground line-through",
+                )}
+              >
+                {todo.title}
+              </p>
+              {todo.dueDate && !todo.completed && (
+                <DueDateBadge dueDate={todo.dueDate} />
               )}
-            >
-              {todo.title}
-            </p>
-            <p data-todo-subtitle className="mt-0.5 text-muted-foreground">
-              {todo.completed ? "Completed" : "Ready to work on"}
-            </p>
+            </div>
+            {todo.labels && todo.labels.length > 0 && (
+              <TodoLabelBadges labels={todo.labels} className="mt-1.5" />
+            )}
           </div>
-
-          {todo.dueDate && !todo.completed && (
-            <DueDateBadge dueDate={todo.dueDate} />
-          )}
 
           <div className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-muted-foreground">
             <Layers className="size-3.5" />

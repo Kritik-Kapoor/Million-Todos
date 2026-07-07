@@ -1,10 +1,23 @@
 import { create } from "zustand";
 import type { Todo } from "@/types/todo";
 
+// ---------------------------------------------------------------------------
+// Internal mutable data structures — never replaced, only mutated in place.
+// This avoids the O(n²) spread copies that occur when every addTodoBatch call
+// clones the entire accumulated byId / allIds collection.
+// ---------------------------------------------------------------------------
+const _byId = new Map<string, Todo>();
+const _allIds: string[] = [];
+
 type TodoStore = {
-  byId: Record<string, Todo>;
+  // `version` is the only reactive signal. It's a cheap number that bumps on
+  // every logical change so React knows to re-render. byId and allIds are
+  // stable references to the mutable structures above.
+  version: number;
+  byId: Map<string, Todo>;
   allIds: string[];
   completedCount: number;
+
   addTodoBatch: (todos: Todo[]) => void;
   addTodo: (todo: Todo) => void;
   replaceTodo: (tempId: string, todo: Todo) => void;
@@ -14,82 +27,69 @@ type TodoStore = {
 };
 
 export const useTodoStore = create<TodoStore>()((set) => ({
-  byId: {},
-  allIds: [],
+  version: 0,
+  byId: _byId,
+  allIds: _allIds,
   completedCount: 0,
 
-  addTodoBatch: (todos) =>
-    set((state) => {
-      const byId = { ...state.byId };
-      const allIds = [...state.allIds];
-      let completedDelta = 0;
-
-      for (const todo of todos) {
-        byId[todo.id] = todo;
-        allIds.push(todo.id);
-        if (todo.completed) completedDelta++;
-      }
-
-      return {
-        byId,
-        allIds,
-        completedCount: state.completedCount + completedDelta,
-      };
-    }),
-
-  addTodo: (todo) =>
+  addTodoBatch: (todos) => {
+    let completedDelta = 0;
+    for (const todo of todos) {
+      _byId.set(todo.id, todo);
+      _allIds.push(todo.id);
+      if (todo.completed) completedDelta++;
+    }
     set((state) => ({
-      byId: { ...state.byId, [todo.id]: todo },
-      allIds: [...state.allIds, todo.id],
-    })),
+      version: state.version + 1,
+      completedCount: state.completedCount + completedDelta,
+    }));
+  },
 
-  replaceTodo: (tempId, todo) =>
-    set((state) => {
-      const byId = { ...state.byId };
-      delete byId[tempId];
-      byId[todo.id] = todo;
+  addTodo: (todo) => {
+    _byId.set(todo.id, todo);
+    _allIds.push(todo.id);
+    set((state) => ({ version: state.version + 1 }));
+  },
 
-      const idx = state.allIds.indexOf(tempId);
-      const allIds = [...state.allIds];
-      if (idx !== -1) allIds[idx] = todo.id;
+  replaceTodo: (tempId, todo) => {
+    _byId.delete(tempId);
+    _byId.set(todo.id, todo);
+    const idx = _allIds.indexOf(tempId);
+    if (idx !== -1) _allIds[idx] = todo.id;
+    set((state) => ({ version: state.version + 1 }));
+  },
 
-      return { byId, allIds };
-    }),
-
-  removeTodo: (id) =>
-    set((state) => {
-      const byId = { ...state.byId };
-      const wasCompleted = byId[id]?.completed;
-      delete byId[id];
-
-      const idx = state.allIds.indexOf(id);
-      const allIds = [...state.allIds];
-      if (idx !== -1) allIds.splice(idx, 1);
-
-      return {
-        byId,
-        allIds,
-        completedCount: state.completedCount - (wasCompleted ? 1 : 0),
-      };
-    }),
-
-  updateTodo: (id, changes) =>
+  removeTodo: (id) => {
+    const wasCompleted = _byId.get(id)?.completed ?? false;
+    _byId.delete(id);
+    const idx = _allIds.indexOf(id);
+    if (idx !== -1) _allIds.splice(idx, 1);
     set((state) => ({
-      byId: { ...state.byId, [id]: { ...state.byId[id], ...changes } },
+      version: state.version + 1,
+      completedCount: state.completedCount - (wasCompleted ? 1 : 0),
+    }));
+  },
+
+  updateTodo: (id, changes) => {
+    const existing = _byId.get(id);
+    if (!existing) return;
+    _byId.set(id, { ...existing, ...changes });
+    set((state) => ({
+      version: state.version + 1,
       completedCount:
         changes.completed !== undefined
           ? state.completedCount + (changes.completed ? 1 : -1)
           : state.completedCount,
-    })),
+    }));
+  },
 
-  incrementSubtaskCount: (id, value) =>
-    set((state) => ({
-      byId: {
-        ...state.byId,
-        [id]: {
-          ...state.byId[id],
-          subtaskCount: Math.max(0, state.byId[id].subtaskCount + value),
-        },
-      },
-    })),
+  incrementSubtaskCount: (id, value) => {
+    const existing = _byId.get(id);
+    if (!existing) return;
+    _byId.set(id, {
+      ...existing,
+      subtaskCount: Math.max(0, existing.subtaskCount + value),
+    });
+    set((state) => ({ version: state.version + 1 }));
+  },
 }));

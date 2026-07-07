@@ -1,4 +1,6 @@
 import type { Request, Response } from "express";
+import { Prisma } from "@prisma/client";
+import type { Todo } from "@prisma/client";
 import { prisma } from "../config/db.js";
 import {
   ApiError,
@@ -14,8 +16,18 @@ export const getTodos = async (req: Request, res: Response) => {
   res.setHeader("Cache-Control", "no-cache");
 
   const userId = req.user!.userId;
+
+  const LABELS_INCLUDE = {
+    labels: {
+      select: {
+        label: { select: { id: true, name: true, color: true } },
+      },
+    },
+  } satisfies Prisma.TodoInclude;
+
+  type TodoRow = Prisma.TodoGetPayload<{ include: typeof LABELS_INCLUDE }>;
+
   let cursor: number | undefined = undefined;
-  type TodoRow = Awaited<ReturnType<typeof prisma.todo.findMany>>[number];
   let todos: TodoRow[] = [];
 
   try {
@@ -24,13 +36,19 @@ export const getTodos = async (req: Request, res: Response) => {
         where: { userId },
         take: BATCH_SIZE,
         orderBy: { seq: "asc" },
+        include: LABELS_INCLUDE,
         ...(cursor !== undefined ? { skip: 1, cursor: { seq: cursor } } : {}),
       });
 
       if (todos.length === 0) break;
 
-      for (const todo of todos) {
-        res.write(JSON.stringify(todo) + "\n");
+      for (const { labels: todoLabels, ...todo } of todos) {
+        res.write(
+          JSON.stringify({
+            ...todo,
+            labels: todoLabels.map(({ label }) => label),
+          }) + "\n",
+        );
       }
 
       cursor = todos[todos.length - 1]!.seq;
@@ -43,7 +61,125 @@ export const getTodos = async (req: Request, res: Response) => {
     if (!res.headersSent) {
       new ApiError(500, message).send(res);
     } else {
-      // Mid-stream error — send a sentinel error line so the client knows
+      // Mid-stream error
+      res.write(JSON.stringify({ error: message }) + "\n");
+    }
+  } finally {
+    res.end();
+  }
+};
+
+export const getFilteredTodos = async (req: Request, res: Response) => {
+  const BATCH_SIZE = 5000;
+
+  res.setHeader("Content-Type", "application/x-ndjson");
+  res.setHeader("Transfer-Encoding", "chunked");
+  res.setHeader("Cache-Control", "no-cache");
+
+  try {
+    const userId = req.user!.userId;
+
+    const search =
+      typeof req.query.search === "string" ? req.query.search : undefined;
+    const labelIds: string[] = Array.isArray(req.query.labelIds)
+      ? (req.query.labelIds as string[])
+      : req.query.labelIds
+        ? [req.query.labelIds as string]
+        : [];
+    const rawDueDate = req.query.dueDate;
+    const dueDate =
+      typeof rawDueDate === "string" &&
+      ["today", "upcoming_week", "past_week", "overdue"].includes(rawDueDate)
+        ? (rawDueDate as "today" | "upcoming_week" | "past_week" | "overdue")
+        : undefined;
+
+    let where = Prisma.sql`t."userId" = ${userId}`;
+
+    if (search?.trim()) {
+      const tsquery = search
+        .trim()
+        .split(/\s+/)
+        .map((word) => `${word}:*`)
+        .join(" & ");
+      where = Prisma.sql`${where} AND t.search_vector @@ to_tsquery('english', ${tsquery})`;
+    }
+
+    if (labelIds.length > 0) {
+      const idSqls = labelIds.map((id) => Prisma.sql`${id}`);
+      const inList = idSqls
+        .slice(1)
+        .reduce((acc, cur) => Prisma.sql`${acc}, ${cur}`, idSqls[0]!);
+      where = Prisma.sql`${where} AND EXISTS (
+        SELECT 1 FROM "TodoLabel" tl
+        WHERE tl."todoId" = t.id
+          AND tl."labelId" IN (${inList})
+      )`;
+    }
+
+    switch (dueDate) {
+      case "today":
+        where = Prisma.sql`${where} AND t."dueDate" >= CURRENT_DATE AND t."dueDate" < CURRENT_DATE + INTERVAL '1 day'`;
+        break;
+      case "upcoming_week":
+        where = Prisma.sql`${where} AND t."dueDate" >= CURRENT_DATE AND t."dueDate" < CURRENT_DATE + INTERVAL '1 week'`;
+        break;
+      case "past_week":
+        where = Prisma.sql`${where} AND t."dueDate" >= CURRENT_DATE - INTERVAL '1 week' AND t."dueDate" < CURRENT_DATE`;
+        break;
+      case "overdue":
+        where = Prisma.sql`${where} AND t."dueDate" IS NOT NULL AND t."dueDate" < NOW()`;
+        break;
+    }
+
+    let cursor: number | undefined = undefined;
+
+    while (true) {
+      const cursorClause: Prisma.Sql =
+        cursor !== undefined
+          ? Prisma.sql`AND t."seq" > ${cursor}`
+          : Prisma.empty;
+
+      // Exclude the generated `search_vector tsvector` column — Prisma's
+      // $queryRaw cannot deserialize tsvector and will throw if it's in the result.
+      // Labels are fetched via a correlated JSON subquery to avoid N+1 queries.
+      const rows: (Todo & {
+        seq: bigint;
+        labels: Array<{ id: string; name: string; color: string }>;
+      })[] = await prisma.$queryRaw`
+        SELECT
+          t."id", t."seq", t."userId", t."title", t."description",
+          t."completed", t."dueDate", t."createdAt", t."updatedAt",
+          t."subtaskCount", t."hasLabels",
+          COALESCE(
+            (
+              SELECT json_agg(json_build_object('id', l."id", 'name', l."name", 'color', l."color"))
+              FROM "TodoLabel" tl
+              JOIN "Label" l ON tl."labelId" = l."id"
+              WHERE tl."todoId" = t."id"
+            ),
+            '[]'::json
+          ) AS labels
+        FROM "Todo" t
+        WHERE ${where} ${cursorClause}
+        ORDER BY t."seq" ASC
+        LIMIT ${BATCH_SIZE}
+      `;
+
+      if (rows.length === 0) break;
+
+      for (const todo of rows) {
+        res.write(JSON.stringify(todo) + "\n");
+      }
+
+      cursor = rows[rows.length - 1]!.seq;
+
+      if (rows.length < BATCH_SIZE) break;
+    }
+  } catch (error) {
+    const message = getErrorMessage(error);
+    if (!res.headersSent) {
+      new ApiError(500, message).send(res);
+    } else {
       res.write(JSON.stringify({ error: message }) + "\n");
     }
   } finally {
@@ -137,143 +273,6 @@ export const updateTodo = async (req: Request, res: Response) => {
     });
 
     return new ApiResponse(200, todo, "Todo updated successfully").send(res);
-  } catch (error) {
-    return new ApiError(500, getErrorMessage(error)).send(res);
-  }
-};
-
-// Subtasks
-export const getSubtasksForTodo = async (req: Request, res: Response) => {
-  try {
-    const todoId = req.params.todoId as string;
-
-    if (!todoId) {
-      return new ApiError(400, "Todo id is required").send(res);
-    }
-
-    const subtasks = await prisma.subtask.findMany({
-      where: { todoId },
-      orderBy: { position: "asc" },
-    });
-
-    let completed = 0;
-    for (const subtask of subtasks) {
-      if (subtask.completed) completed += 1;
-    }
-
-    return new ApiResponse(200, {
-      subtasks,
-      counts: {
-        all: subtasks.length,
-        completed,
-        pending: subtasks.length - completed,
-      },
-    }).send(res);
-  } catch (error) {
-    return new ApiError(500, getErrorMessage(error)).send(res);
-  }
-};
-
-export const updateSubtask = async (req: Request, res: Response) => {
-  try {
-    const subtaskId = req.params.subtaskId as string;
-
-    if (!subtaskId) {
-      return new ApiError(400, "Subtask id is required").send(res);
-    }
-
-    const subtask = await prisma.subtask.update({
-      where: { id: subtaskId },
-      data: req.body,
-    });
-
-    return new ApiResponse(
-      200,
-      { subtask },
-      "Subtask updated successfully",
-    ).send(res);
-  } catch (error) {
-    return new ApiError(500, getErrorMessage(error)).send(res);
-  }
-};
-
-export const createSubtask = async (req: Request, res: Response) => {
-  try {
-    const todoId = req.params.todoId as string;
-    const userId = req.user!.userId;
-    const title =
-      typeof req.body.title === "string" ? req.body.title.trim() : "";
-
-    if (!todoId) {
-      return new ApiError(400, "Todo id is required").send(res);
-    }
-
-    if (!title) {
-      return new ApiError(400, "Title is required").send(res);
-    }
-
-    const todo = await prisma.todo.findFirst({
-      where: { id: todoId, userId },
-    });
-
-    if (!todo) {
-      return new ApiError(404, "Todo not found").send(res);
-    }
-
-    const lastSubtask = await prisma.subtask.findFirst({
-      where: { todoId },
-      orderBy: { position: "desc" },
-      select: { position: true },
-    });
-
-    const POSITION_STEP = 1000;
-    const position = lastSubtask
-      ? lastSubtask.position + POSITION_STEP
-      : POSITION_STEP;
-
-    const subtask = await prisma.$transaction(async (tx) => {
-      const created = await tx.subtask.create({
-        data: { todoId, title, position },
-      });
-
-      await tx.todo.update({
-        where: { id: todoId },
-        data: { subtaskCount: { increment: 1 } },
-      });
-
-      return created;
-    });
-
-    return new ApiResponse(
-      201,
-      { subtask },
-      "Subtask created successfully",
-    ).send(res);
-  } catch (error) {
-    return new ApiError(500, getErrorMessage(error)).send(res);
-  }
-};
-
-export const deleteSubtask = async (req: Request, res: Response) => {
-  try {
-    const subtaskId = req.params.subtaskId as string;
-
-    if (!subtaskId) {
-      return new ApiError(400, "Subtask id is required").send(res);
-    }
-
-    await prisma.$transaction(async (tx) => {
-      const subtask = await tx.subtask.delete({
-        where: { id: subtaskId },
-      });
-
-      await tx.todo.update({
-        where: { id: subtask.todoId },
-        data: { subtaskCount: { decrement: 1 } },
-      });
-    });
-
-    return new ApiResponse(200, null, "Subtask deleted successfully").send(res);
   } catch (error) {
     return new ApiError(500, getErrorMessage(error)).send(res);
   }

@@ -11,10 +11,7 @@ if (!databaseUrl) {
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg(databaseUrl),
-  log:
-    process.env.NODE_ENV === "development"
-      ? ["query", "warn", "error"]
-      : ["error"],
+  log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
 });
 
 const connectDB = async () => {

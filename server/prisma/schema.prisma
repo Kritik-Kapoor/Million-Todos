@@ -31,8 +31,10 @@ model Todo {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   subtasks Subtask[]
   subtaskCount Int @default(0)
+  hasLabels Boolean @default(false)
   labels TodoLabel[]
   @@index([userId])
+  @@index([userId, hasLabels, seq])
 }
 
 model Subtask {
@@ -55,7 +57,6 @@ model Label {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   todos TodoLabel[]
   @@unique([userId, name])
-  @@index([userId])
 }
 
 model TodoLabel {

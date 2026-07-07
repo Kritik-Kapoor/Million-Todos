@@ -6,6 +6,7 @@ import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/auth.routes.js";
 import labelRoutes from "./routes/label.routes.js";
 import todoRoutes from "./routes/todo.routes.js";
+import subtaskRoutes from "./routes/subtask.routes.js";
 
 dotenv.config();
 connectDB();
@@ -28,6 +29,7 @@ app.use(cookieParser());
 app.use("/auth", authRoutes);
 app.use("/todos", todoRoutes);
 app.use("/labels", labelRoutes);
+app.use("/subtasks", subtaskRoutes);
 
 const port = process.env.PORT ?? "3001";
 

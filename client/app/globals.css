@@ -150,3 +150,7 @@ html[data-density="compact"] [data-todo-title] {
 html[data-density="compact"] [data-todo-subtitle] {
   display: none;
 }
+
+html[data-density="compact"] [data-todo-labels] {
+  margin-top: 0.125rem;
+}
