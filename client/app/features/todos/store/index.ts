@@ -18,6 +18,7 @@ type TodoStore = {
   allIds: string[];
   completedCount: number;
 
+  resetTodos: () => void;
   addTodoBatch: (todos: Todo[]) => void;
   addTodo: (todo: Todo) => void;
   replaceTodo: (tempId: string, todo: Todo) => void;
@@ -31,6 +32,12 @@ export const useTodoStore = create<TodoStore>()((set) => ({
   byId: _byId,
   allIds: _allIds,
   completedCount: 0,
+
+  resetTodos: () => {
+    _byId.clear();
+    _allIds.length = 0;
+    set({ version: 0, completedCount: 0 });
+  },
 
   addTodoBatch: (todos) => {
     let completedDelta = 0;

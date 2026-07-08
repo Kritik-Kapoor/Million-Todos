@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Todo } from "@/types/todo";
+import { useThrottledFlush } from "@/hooks/useThrottledFlush";
+import type { Todo, TodoLabel } from "@/types/todo";
 import {
   buildFilterParams,
   createTodo,
@@ -33,8 +34,22 @@ function labelToOption(label: LabelItem): SelectOption {
   return { value: label.id, label: label.name, color: label.color };
 }
 
+function labelIdsToTodoLabels(
+  labelIds: string[],
+  options: SelectOption[],
+): TodoLabel[] {
+  return labelIds.flatMap((id) => {
+    const option = options.find((o) => o.value === id);
+    if (!option) return [];
+    return [
+      { id: option.value, name: option.label, color: option.color as string },
+    ];
+  });
+}
+
 export function useTodosPage() {
   const {
+    resetTodos,
     addTodoBatch,
     addTodo,
     replaceTodo,
@@ -50,7 +65,6 @@ export function useTodosPage() {
 
   // ── Filter state ──
   const [filters, setFiltersState] = useState<TodoFilters>({});
-  // null = not filtering; string[] = filtered IDs (may be empty if no matches)
   const [filteredTodoIds, setFilteredTodoIds] = useState<string[] | null>(null);
   const [isLoadingFilters, setIsLoadingFilters] = useState(false);
   const filterAbortRef = useRef<AbortController | null>(null);
@@ -82,7 +96,14 @@ export function useTodosPage() {
     name: "selectedLabels",
   });
 
+  const { push: pushTodos, flush: flushTodos } = useThrottledFlush<Todo>(
+    addTodoBatch,
+    200,
+  );
+
   useEffect(() => {
+    resetTodos();
+
     const controller = new AbortController();
 
     const streamTodos = async () => {
@@ -97,20 +118,12 @@ export function useTodosPage() {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
-        let todosBatch: Todo[] = [];
-
-        const flushBatch = () => {
-          if (todosBatch.length === 0) return;
-          const batch = todosBatch;
-          todosBatch = [];
-          addTodoBatch(batch);
-        };
 
         while (true) {
           const { done, value } = await reader.read();
 
           if (done) {
-            flushBatch();
+            flushTodos();
             break;
           }
 
@@ -118,21 +131,22 @@ export function useTodosPage() {
           const lines = buffer.split("\n");
           buffer = lines.pop() ?? "";
 
+          const batchTodos: Todo[] = [];
           for (const line of lines) {
             if (!line.trim()) continue;
             try {
               const parsed = JSON.parse(line) as Todo & { error?: string };
               if (parsed.error) {
                 console.error("[stream] server error:", parsed.error);
-                flushBatch();
+                flushTodos();
                 return;
               }
-              todosBatch.push(parsed);
-              if (todosBatch.length >= 10_000) flushBatch();
+              batchTodos.push(parsed);
             } catch {
               console.error("[stream] failed to parse line:", line);
             }
           }
+          if (batchTodos.length > 0) pushTodos(batchTodos);
         }
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
@@ -143,7 +157,7 @@ export function useTodosPage() {
 
     streamTodos();
     return () => controller.abort();
-  }, [addTodoBatch]);
+  }, [pushTodos, flushTodos, resetTodos]);
 
   const createTodoMutation = useMutation({
     mutationFn: createTodo,
@@ -249,6 +263,56 @@ export function useTodosPage() {
     [incrementSubtaskCount],
   );
 
+  const updateTodoDueDateMutation = useMutation({
+    mutationFn: ({ id, dueDate }: { id: string; dueDate: Date | null }) =>
+      updateTodo(id, {
+        dueDate: dueDate ?? null,
+      }),
+    onMutate: ({ id, dueDate }) => {
+      const previousDueDate = useTodoStore.getState().byId.get(id)?.dueDate;
+      updateTodoInStore(id, {
+        dueDate: dueDate ? dueDate.toISOString() : null,
+      });
+      return { id, previousDueDate };
+    },
+    onError: (error, _, ctx) => {
+      if (ctx?.id) updateTodoInStore(ctx.id, { dueDate: ctx.previousDueDate });
+      toast.error(getErrorMessage(error));
+    },
+  });
+
+  const updateTodoLabelsMutation = useMutation({
+    mutationFn: ({ id, labelIds }: { id: string; labelIds: string[] }) =>
+      updateTodo(id, { labels: labelIds }),
+    onMutate: ({ id, labelIds }) => {
+      const previousLabels = useTodoStore.getState().byId.get(id)?.labels;
+      updateTodoInStore(id, {
+        labels: labelIdsToTodoLabels(labelIds, labelOptions),
+      });
+      return { id, previousLabels };
+    },
+    onError: (error, _, ctx) => {
+      if (ctx?.id) updateTodoInStore(ctx.id, { labels: ctx.previousLabels });
+      toast.error(getErrorMessage(error));
+    },
+  });
+
+  const handleUpdateTodoDueDate = useCallback(
+    (id: string, dueDate: Date | null) => {
+      if (!id) return;
+      updateTodoDueDateMutation.mutate({ id, dueDate });
+    },
+    [updateTodoDueDateMutation],
+  );
+
+  const handleUpdateTodoLabels = useCallback(
+    (id: string, labelIds: string[]) => {
+      if (!id) return;
+      updateTodoLabelsMutation.mutate({ id, labelIds });
+    },
+    [updateTodoLabelsMutation],
+  );
+
   // ── Filter actions ──
   const applyFilters = useCallback(
     async (newFilters: TodoFilters) => {
@@ -347,6 +411,8 @@ export function useTodosPage() {
       completedCount,
       activeCount,
       isCreatingTodo: createTodoMutation.isPending,
+      isUpdatingTodoDueDate: updateTodoDueDateMutation.isPending,
+      isUpdatingTodoLabels: updateTodoLabelsMutation.isPending,
       isFiltering,
       isLoadingFilters,
       filters,
@@ -356,6 +422,8 @@ export function useTodosPage() {
       handleToggleTodo,
       handleDeleteTodo: deleteTodoMutation.mutate,
       handleUpdateTodoTitle,
+      handleUpdateTodoDueDate,
+      handleUpdateTodoLabels,
       handleSubtaskCountChange,
       applyFilters,
       clearFilters,

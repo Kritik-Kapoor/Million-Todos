@@ -35,6 +35,8 @@ const Todos = () => {
       form,
       selectedLabels,
       isCreatingTodo,
+      isUpdatingTodoDueDate,
+      isUpdatingTodoLabels,
       isFiltering,
       isLoadingFilters,
       filters,
@@ -44,6 +46,8 @@ const Todos = () => {
       handleToggleTodo,
       handleDeleteTodo,
       handleUpdateTodoTitle,
+      handleUpdateTodoDueDate,
+      handleUpdateTodoLabels,
       handleSubtaskCountChange,
       applyFilters,
       clearFilters,
@@ -188,7 +192,7 @@ const Todos = () => {
                 updateFilter({ search: e.target.value || undefined })
               }
               placeholder="Search todos..."
-              className="h-9 rounded-lg pl-9 text-sm"
+              className="h-11 rounded-lg pl-9 text-sm"
             />
           </div>
 
@@ -259,9 +263,15 @@ const Todos = () => {
 
       <TodoList
         todoIds={todoIds}
+        labelOptions={labelOptions}
+        fetchingLabels={fetchingLabels}
+        isUpdatingTodoDueDate={isUpdatingTodoDueDate}
+        isUpdatingTodoLabels={isUpdatingTodoLabels}
         onToggleTodo={handleToggleTodo}
         onDeleteTodo={handleDeleteTodo}
         onUpdateTodoTitle={handleUpdateTodoTitle}
+        onUpdateTodoDueDate={handleUpdateTodoDueDate}
+        onUpdateTodoLabels={handleUpdateTodoLabels}
         handleSubtaskCountChange={handleSubtaskCountChange}
       />
     </div>

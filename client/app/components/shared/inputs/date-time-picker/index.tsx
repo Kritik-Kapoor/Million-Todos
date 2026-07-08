@@ -15,22 +15,28 @@ import { Separator } from "@/components/ui/separator";
 interface DateTimePickerProps {
   value?: Date;
   onChange?: (date: Date | undefined) => void;
+  /** Called once when the popover closes — use this to avoid firing on every intermediate change. */
+  onCommit?: (date: Date | undefined) => void;
   placeholder?: string;
   minDateTime?: Date;
   maxDateTime?: Date;
   disabled?: boolean;
   className?: string;
+  contentWidth?: string;
 }
 
 export function DateTimePicker({
   value,
   onChange,
+  onCommit,
   placeholder = "Pick a date & time",
   minDateTime,
   maxDateTime,
   disabled = false,
   className,
+  contentWidth = "200px",
 }: DateTimePickerProps) {
+  const [open, setOpen] = useState(false);
   const [date, setDate] = useState<Date | undefined>(value);
   const [time, setTime] = useState<Date | undefined>(value);
 
@@ -63,7 +69,19 @@ export function DateTimePicker({
   const handleReset = () => {
     setDate(undefined);
     setTime(undefined);
+    setOpen(false);
     onChange?.(undefined);
+    // Fire onCommit directly — Radix won't trigger onOpenChange for a
+    // programmatic setOpen(false), so we must call it here explicitly.
+    onCommit?.(undefined);
+  };
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    // Popover is closing via user gesture (click-outside / Escape).
+    if (!next && onCommit) {
+      onCommit(buildCombined(date, time));
+    }
   };
 
   const displayLabel = combined
@@ -72,7 +90,7 @@ export function DateTimePicker({
 
   return (
     <div className={cn("grid gap-2", className)}>
-      <Popover>
+      <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild disabled={disabled}>
           <Button
             variant="outline"
@@ -86,8 +104,9 @@ export function DateTimePicker({
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          className="flex w-auto flex-col gap-3 min-w-[200px]"
+          className="flex w-auto flex-col gap-3"
           align="start"
+          style={{ minWidth: contentWidth }}
         >
           <Calendar
             mode="single"

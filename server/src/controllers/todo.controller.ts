@@ -8,6 +8,23 @@ import {
   getErrorMessage,
 } from "../utils/apiResponse.js";
 
+const LABELS_INCLUDE = {
+  labels: {
+    select: {
+      label: { select: { id: true, name: true, color: true } },
+    },
+  },
+} satisfies Prisma.TodoInclude;
+
+type TodoWithLabels = Prisma.TodoGetPayload<{ include: typeof LABELS_INCLUDE }>;
+
+function formatTodoWithLabels({ labels: todoLabels, ...todo }: TodoWithLabels) {
+  return {
+    ...todo,
+    labels: todoLabels.map(({ label }) => label),
+  };
+}
+
 export const getTodos = async (req: Request, res: Response) => {
   const BATCH_SIZE = 5000;
 
@@ -16,14 +33,6 @@ export const getTodos = async (req: Request, res: Response) => {
   res.setHeader("Cache-Control", "no-cache");
 
   const userId = req.user!.userId;
-
-  const LABELS_INCLUDE = {
-    labels: {
-      select: {
-        label: { select: { id: true, name: true, color: true } },
-      },
-    },
-  } satisfies Prisma.TodoInclude;
 
   type TodoRow = Prisma.TodoGetPayload<{ include: typeof LABELS_INCLUDE }>;
 
@@ -220,6 +229,7 @@ export const createTodo = async (req: Request, res: Response) => {
       data: {
         userId,
         title: trimmedTitle,
+        hasLabels: labelIds.length > 0,
         ...(dueDate && {
           dueDate: new Date(dueDate),
         }),
@@ -231,9 +241,14 @@ export const createTodo = async (req: Request, res: Response) => {
           },
         }),
       },
+      include: LABELS_INCLUDE,
     });
 
-    return new ApiResponse(201, todo, "Todo created successfully").send(res);
+    return new ApiResponse(
+      201,
+      formatTodoWithLabels(todo),
+      "Todo created successfully",
+    ).send(res);
   } catch (error) {
     return new ApiError(500, getErrorMessage(error)).send(res);
   }
@@ -267,12 +282,73 @@ export const updateTodo = async (req: Request, res: Response) => {
       return new ApiError(400, "Todo id is required").send(res);
     }
 
+    const { title, completed, dueDate, labels } = req.body as {
+      title?: string;
+      completed?: boolean;
+      dueDate?: string | null;
+      labels?: string[];
+    };
+
+    const data: Prisma.TodoUpdateInput = {};
+
+    if (title !== undefined) {
+      const trimmedTitle = title.trim();
+      if (!trimmedTitle) {
+        return new ApiError(400, "Title is required").send(res);
+      }
+      data.title = trimmedTitle;
+    }
+
+    if (completed !== undefined) {
+      data.completed = completed;
+    }
+
+    if (dueDate !== undefined) {
+      data.dueDate = dueDate === null ? null : new Date(dueDate);
+    }
+
+    if (labels !== undefined) {
+      const labelIds = Array.isArray(labels)
+        ? [...new Set(labels.filter((id) => typeof id === "string" && id))]
+        : [];
+
+      if (labelIds.length > 0) {
+        const ownedLabels = await prisma.label.findMany({
+          where: { userId, id: { in: labelIds } },
+          select: { id: true },
+        });
+
+        if (ownedLabels.length !== labelIds.length) {
+          return new ApiError(400, "One or more labels are invalid").send(res);
+        }
+      }
+
+      data.hasLabels = labelIds.length > 0;
+      data.labels = {
+        deleteMany: {},
+        ...(labelIds.length > 0 && {
+          create: labelIds.map((labelId) => ({
+            label: { connect: { id: labelId } },
+          })),
+        }),
+      };
+    }
+
+    if (Object.keys(data).length === 0) {
+      return new ApiError(400, "No valid fields to update").send(res);
+    }
+
     const todo = await prisma.todo.update({
       where: { id: todoId, userId },
-      data: req.body,
+      data,
+      include: LABELS_INCLUDE,
     });
 
-    return new ApiResponse(200, todo, "Todo updated successfully").send(res);
+    return new ApiResponse(
+      200,
+      formatTodoWithLabels(todo),
+      "Todo updated successfully",
+    ).send(res);
   } catch (error) {
     return new ApiError(500, getErrorMessage(error)).send(res);
   }

@@ -6,16 +6,24 @@ import { Card } from "@/components/ui/card";
 import SheetDialog from "@/components/shared/SheetDialog";
 import SubtaskList from "@/features/subtasks/components/SubtaskList";
 import EditableTodoTitle from "./EditableTodoTitle";
+import TodoDialogMeta from "./TodoDialogMeta";
 import { useUiSettings } from "@/features/settings/context/UiSettingsContext";
 import TodoRow from "./TodoRow";
 import IndexedVirtualList from "@/components/shared/IndexedVirtualList";
 import { useTodoStore } from "../store";
+import { Separator } from "@/components/ui/separator";
 
 type TodoListProps = {
   todoIds: string[];
+  labelOptions: SelectOption[];
+  fetchingLabels: boolean;
+  isUpdatingTodoDueDate: boolean;
+  isUpdatingTodoLabels: boolean;
   onToggleTodo: (id: string, completed: boolean) => void;
   onDeleteTodo: (id: string) => void;
   onUpdateTodoTitle: (id: string, title: string, previousTitle: string) => void;
+  onUpdateTodoDueDate: (id: string, dueDate: Date | null) => void;
+  onUpdateTodoLabels: (id: string, labelIds: string[]) => void;
   handleSubtaskCountChange: (todoId: string, value: number) => void;
 };
 
@@ -25,9 +33,15 @@ const CONTAINER_HEIGHT = 500;
 
 const TodoList = ({
   todoIds,
+  labelOptions,
+  fetchingLabels,
+  isUpdatingTodoDueDate,
+  isUpdatingTodoLabels,
   onToggleTodo,
   onDeleteTodo,
   onUpdateTodoTitle,
+  onUpdateTodoDueDate,
+  onUpdateTodoLabels,
   handleSubtaskCountChange,
 }: TodoListProps) => {
   const { density } = useUiSettings();
@@ -35,9 +49,10 @@ const TodoList = ({
 
   const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null);
 
-  const selectedTodo = useTodoStore((state) =>
-    selectedTodoId ? (state.byId.get(selectedTodoId) ?? null) : null,
-  );
+  useTodoStore((state) => state.version);
+  const selectedTodo = selectedTodoId
+    ? (useTodoStore.getState().byId.get(selectedTodoId) ?? null)
+    : null;
 
   const handleTitleSave = (title: string) => {
     if (!selectedTodo) return;
@@ -99,13 +114,25 @@ const TodoList = ({
         titleLabel={selectedTodo?.title}
       >
         {selectedTodo && (
-          <SubtaskList
-            key={selectedTodo.id}
-            todoId={selectedTodo.id}
-            onSubtaskCountChange={(value) => {
-              handleSubtaskCountChange(selectedTodo.id, value);
-            }}
-          />
+          <>
+            <TodoDialogMeta
+              todo={selectedTodo}
+              labelOptions={labelOptions}
+              fetchingLabels={fetchingLabels}
+              isUpdatingDueDate={isUpdatingTodoDueDate}
+              isUpdatingLabels={isUpdatingTodoLabels}
+              onDueDateChange={onUpdateTodoDueDate}
+              onLabelsChange={onUpdateTodoLabels}
+            />
+            <Separator className="my-4" />
+            <SubtaskList
+              key={selectedTodo.id}
+              todoId={selectedTodo.id}
+              onSubtaskCountChange={(value) => {
+                handleSubtaskCountChange(selectedTodo.id, value);
+              }}
+            />
+          </>
         )}
       </SheetDialog>
     </>

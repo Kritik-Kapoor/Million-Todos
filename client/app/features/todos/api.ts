@@ -9,6 +9,11 @@ export type TodoFilters = {
   dueDate?: DueDateFilter;
 };
 
+export type UpdateTodoPayload = Partial<Pick<Todo, "title" | "completed">> & {
+  labels?: string[];
+  dueDate?: Date | null;
+};
+
 export function buildFilterParams(filters: TodoFilters): URLSearchParams {
   const params = new URLSearchParams();
   if (filters.search?.trim()) params.set("search", filters.search.trim());
@@ -36,10 +41,7 @@ export const createTodo = (data: {
     fallbackErrorMessage: "Failed to create todo",
   });
 
-export const updateTodo = (
-  todoId: string,
-  data: Partial<Pick<Todo, "title" | "completed">>,
-) =>
+export const updateTodo = (todoId: string, data: UpdateTodoPayload) =>
   apiFetch<Todo>(`/todos/${todoId}`, {
     method: "POST",
     body: data,

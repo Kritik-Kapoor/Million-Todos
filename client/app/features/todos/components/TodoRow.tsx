@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils/tailwindMerge";
 import { CheckCircle2, Circle, Layers, Trash2 } from "lucide-react";
 import DueDateBadge from "./DueDateBadge";
-import TodoLabelBadges from "./TodoLabelBadges";
+import { TodoLabelBadges } from "./TodoLabelBadges";
 import { useTodoStore } from "../store";
 
 const TodoRow = ({
