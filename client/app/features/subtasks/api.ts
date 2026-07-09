@@ -15,7 +15,7 @@ export const updateSubtask = (
   data: Partial<Pick<Subtask, "title" | "completed" | "position">>,
 ) =>
   apiFetch<{ subtask: Subtask }>(`/subtasks/${subtaskId}`, {
-    method: "POST",
+    method: "PATCH",
     body: data,
     fallbackErrorMessage: "Failed to update subtask",
   }).then(({ subtask }) => subtask);

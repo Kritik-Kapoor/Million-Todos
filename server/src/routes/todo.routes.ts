@@ -14,7 +14,7 @@ const router = Router();
 router.get("/", authenticateUser, getTodos);
 router.post("/", authenticateUser, createTodo);
 router.get("/filter", authenticateUser, getFilteredTodos);
-router.post("/:todoId", authenticateUser, updateTodo);
+router.patch("/:todoId", authenticateUser, updateTodo);
 router.delete("/:todoId", authenticateUser, deleteTodo);
 
 export default router;

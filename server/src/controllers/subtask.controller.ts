@@ -37,29 +37,6 @@ export const getSubtasksForTodo = async (req: Request, res: Response) => {
   }
 };
 
-export const updateSubtask = async (req: Request, res: Response) => {
-  try {
-    const subtaskId = req.params.subtaskId as string;
-
-    if (!subtaskId) {
-      return new ApiError(400, "Subtask id is required").send(res);
-    }
-
-    const subtask = await prisma.subtask.update({
-      where: { id: subtaskId },
-      data: req.body,
-    });
-
-    return new ApiResponse(
-      200,
-      { subtask },
-      "Subtask updated successfully",
-    ).send(res);
-  } catch (error) {
-    return new ApiError(500, getErrorMessage(error)).send(res);
-  }
-};
-
 export const createSubtask = async (req: Request, res: Response) => {
   try {
     const todoId = req.params.todoId as string;
@@ -113,6 +90,30 @@ export const createSubtask = async (req: Request, res: Response) => {
       "Subtask created successfully",
     ).send(res);
   } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const updateSubtask = async (req: Request, res: Response) => {
+  try {
+    const subtaskId = req.params.subtaskId as string;
+
+    if (!subtaskId) {
+      return new ApiError(400, "Subtask id is required").send(res);
+    }
+
+    const subtask = await prisma.subtask.update({
+      where: { id: subtaskId },
+      data: req.body,
+    });
+
+    return new ApiResponse(
+      200,
+      { subtask },
+      "Subtask updated successfully",
+    ).send(res);
+  } catch (error) {
+    console.error(error);
     return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };

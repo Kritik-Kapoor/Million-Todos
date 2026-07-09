@@ -43,7 +43,7 @@ export const createTodo = (data: {
 
 export const updateTodo = (todoId: string, data: UpdateTodoPayload) =>
   apiFetch<Todo>(`/todos/${todoId}`, {
-    method: "POST",
+    method: "PATCH",
     body: data,
     fallbackErrorMessage: "Failed to update todo",
   });

@@ -11,7 +11,7 @@ const router = Router();
 
 router.get("/:todoId", authenticateUser, getSubtasksForTodo);
 router.post("/:todoId", authenticateUser, createSubtask);
-router.post("/:subtaskId", authenticateUser, updateSubtask);
+router.patch("/:subtaskId", authenticateUser, updateSubtask);
 router.delete("/:subtaskId", authenticateUser, deleteSubtask);
 
 export default router;

@@ -30,7 +30,7 @@ export const updateLabel = (
   data: Partial<Pick<LabelItem, "name" | "color">>,
 ) =>
   apiFetch<LabelItem>(`/labels/${labelId}`, {
-    method: "POST",
+    method: "PATCH",
     body: data,
     fallbackErrorMessage: "Failed to update label",
   });
