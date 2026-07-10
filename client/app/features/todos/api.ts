@@ -1,7 +1,9 @@
 import { apiFetch } from "@/lib/utils/apiClient";
 import type { Todo } from "@/types/todo";
-
-export type DueDateFilter = "today" | "upcoming_week" | "past_week" | "overdue";
+import {
+  dueDateFilterToRange,
+  type DueDateFilter,
+} from "./utils/dueDateFilterRange";
 
 export type TodoFilters = {
   search?: string;
@@ -9,7 +11,9 @@ export type TodoFilters = {
   dueDate?: DueDateFilter;
 };
 
-export type UpdateTodoPayload = Partial<Pick<Todo, "title" | "completed">> & {
+export type UpdateTodoPayload = Partial<
+  Pick<Todo, "title" | "completed" | "description">
+> & {
   labels?: string[];
   dueDate?: Date | null;
 };
@@ -18,7 +22,11 @@ export function buildFilterParams(filters: TodoFilters): URLSearchParams {
   const params = new URLSearchParams();
   if (filters.search?.trim()) params.set("search", filters.search.trim());
   filters.labelIds?.forEach((id) => params.append("labelIds", id));
-  if (filters.dueDate) params.set("dueDate", filters.dueDate);
+  if (filters.dueDate) {
+    const { from, to } = dueDateFilterToRange(filters.dueDate);
+    if (from) params.set("dueDateFrom", from);
+    if (to) params.set("dueDateTo", to);
+  }
   return params;
 }
 

@@ -2,8 +2,17 @@
 
 import MultiSelectCount from "@/components/shared/inputs/MultiSelectCount";
 import { DateTimePicker } from "@/components/shared/inputs/date-time-picker";
-import type { Todo, TodoLabel } from "@/types/todo";
+import type {
+  Todo,
+  TodoLabel,
+  TodoMetaDataChangeDataParams,
+} from "@/types/todo";
 import { MutableTodoBadge } from "./TodoLabelBadges";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Check, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { cn } from "@/lib/utils/tailwindMerge";
 
 type TodoDialogMetaProps = {
   todo: Todo;
@@ -11,9 +20,10 @@ type TodoDialogMetaProps = {
   fetchingLabels: boolean;
   isUpdatingDueDate: boolean;
   isUpdatingLabels: boolean;
-  onDueDateChange: (todoId: string, dueDate: Date | null) => void;
-  onLabelsChange: (todoId: string, labelIds: string[]) => void;
+  onTodoMetaDataChange: (params: TodoMetaDataChangeDataParams) => void;
 };
+
+const MAX_DESCRIPTION_LENGTH = 300;
 
 function labelsToOptions(labels: TodoLabel[]): SelectOption[] {
   return labels.map((label) => ({
@@ -29,16 +39,26 @@ const TodoDialogMeta = ({
   fetchingLabels,
   isUpdatingDueDate,
   isUpdatingLabels,
-  onDueDateChange,
-  onLabelsChange,
+  onTodoMetaDataChange,
 }: TodoDialogMetaProps) => {
-  const selectedLabelOptions = labelsToOptions(todo.labels ?? []);
+  const descriptionEditorRef = useRef<HTMLDivElement>(null);
+  const [isDescriptionFocused, setIsDescriptionFocused] = useState(false);
+  const [description, setDescription] = useState(todo.description ?? "");
+
+  const selectedLabelOptions = useMemo(
+    () => labelsToOptions(todo.labels ?? []),
+    [todo.labels],
+  );
 
   const handleDueDateChange = (date: Date | undefined) => {
     const next = date?.toISOString() ?? null;
     const current = todo.dueDate ?? null;
     if (next === current) return;
-    onDueDateChange(todo.id, date ?? null);
+    onTodoMetaDataChange({
+      id: todo.id,
+      updateFields: "dueDate",
+      data: { dueDate: date ?? null },
+    });
   };
 
   const handleLabelsChange = (options: SelectOption[]) => {
@@ -52,23 +72,100 @@ const TodoDialogMeta = ({
       .join(",");
     if (nextIds === currentIds) return;
 
-    onLabelsChange(
-      todo.id,
-      options.map((o) => o.value),
-    );
+    onTodoMetaDataChange({
+      id: todo.id,
+      updateFields: "labels",
+      data: { labels: options.map((o) => o.value) },
+    });
   };
 
   const removeLabel = (labelId: string) => {
-    onLabelsChange(
-      todo.id,
-      selectedLabelOptions
-        .filter((o) => o.value !== labelId)
-        .map((o) => o.value),
-    );
+    onTodoMetaDataChange({
+      id: todo.id,
+      updateFields: "labels",
+      data: {
+        labels: selectedLabelOptions
+          .filter((o) => o.value !== labelId)
+          .map((o) => o.value),
+      },
+    });
+  };
+
+  const handleDescriptionChange = (nextDescription: string) => {
+    onTodoMetaDataChange({
+      id: todo.id,
+      updateFields: "description",
+      data: { description: nextDescription },
+    });
+    setIsDescriptionFocused(false);
+  };
+
+  const cancelDescriptionEdit = () => {
+    setDescription(todo.description ?? "");
+    setIsDescriptionFocused(false);
+  };
+
+  const commitDescriptionEdit = () => {
+    const trimmed = description.trim();
+    const current = todo.description ?? "";
+    if (trimmed !== current) handleDescriptionChange(trimmed);
+    else cancelDescriptionEdit();
+  };
+
+  const handleDescriptionFocus = () => {
+    setDescription(todo.description ?? "");
+    setIsDescriptionFocused(true);
+  };
+
+  const handleDescriptionBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
+    if (descriptionEditorRef.current?.contains(e.relatedTarget)) return;
+    cancelDescriptionEdit();
   };
 
   return (
     <div className="flex flex-col gap-3 px-5">
+      <div ref={descriptionEditorRef} className="relative">
+        <Textarea
+          value={isDescriptionFocused ? description : (todo.description ?? "")}
+          onChange={(e) => setDescription(e.target.value)}
+          onFocus={handleDescriptionFocus}
+          onBlur={handleDescriptionBlur}
+          placeholder="Add description"
+          maxLength={MAX_DESCRIPTION_LENGTH}
+          className={cn(
+            "min-h-24 resize-none pr-16",
+            isDescriptionFocused && "pb-10",
+          )}
+        />
+
+        {isDescriptionFocused && (
+          <>
+            <span className="absolute bottom-2 left-3 text-xs text-muted-foreground">
+              {description.length}/{MAX_DESCRIPTION_LENGTH}
+            </span>
+            <div className="absolute bottom-2 right-2 flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Cancel description edit"
+                onClick={cancelDescriptionEdit}
+              >
+                <X className="size-4 text-red-500" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Save description"
+                onClick={commitDescriptionEdit}
+              >
+                <Check className="size-4 text-green-500" />
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
       <div className="flex flex-col gap-2 sm:flex-row">
         <DateTimePicker
           key={`${todo.id}-due-${todo.dueDate ?? "none"}`}

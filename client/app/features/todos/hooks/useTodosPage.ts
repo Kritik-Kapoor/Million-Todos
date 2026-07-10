@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useThrottledFlush } from "@/hooks/useThrottledFlush";
-import type { Todo, TodoLabel } from "@/types/todo";
+import type {
+  Todo,
+  TodoLabel,
+  TodoMetaDataChangeDataParams,
+} from "@/types/todo";
 import {
   buildFilterParams,
   createTodo,
@@ -70,7 +74,6 @@ export function useTodosPage() {
   const filterAbortRef = useRef<AbortController | null>(null);
 
   const isFiltering = filteredTodoIds !== null;
-  const displayTodoIds = isFiltering ? filteredTodoIds : todoIds;
 
   const form = useForm<CreateTodoValues>({
     resolver: zodResolver(createTodoSchema),
@@ -166,6 +169,7 @@ export function useTodosPage() {
       addTodo({
         id: tempId,
         title: data.title,
+        description: null,
         completed: false,
         subtaskCount: 0,
         dueDate: data.dueDate?.toISOString() ?? null,
@@ -246,15 +250,6 @@ export function useTodosPage() {
     },
   });
 
-  const handleUpdateTodoTitle = useCallback(
-    (id: string, title: string, previousTitle: string) => {
-      const trimmedTitle = title.trim();
-      if (!trimmedTitle || trimmedTitle === previousTitle) return;
-      updateTodoTitleMutation.mutate({ id, title: trimmedTitle });
-    },
-    [updateTodoTitleMutation],
-  );
-
   const handleSubtaskCountChange = useCallback(
     (todoId: string, value: number) => {
       if (!todoId) return;
@@ -265,9 +260,7 @@ export function useTodosPage() {
 
   const updateTodoDueDateMutation = useMutation({
     mutationFn: ({ id, dueDate }: { id: string; dueDate: Date | null }) =>
-      updateTodo(id, {
-        dueDate: dueDate ?? null,
-      }),
+      updateTodo(id, { dueDate }),
     onMutate: ({ id, dueDate }) => {
       const previousDueDate = useTodoStore.getState().byId.get(id)?.dueDate;
       updateTodoInStore(id, {
@@ -297,20 +290,49 @@ export function useTodosPage() {
     },
   });
 
-  const handleUpdateTodoDueDate = useCallback(
-    (id: string, dueDate: Date | null) => {
-      if (!id) return;
-      updateTodoDueDateMutation.mutate({ id, dueDate });
+  const updateTodoDescriptionMutation = useMutation({
+    mutationFn: ({
+      id,
+      description,
+    }: {
+      id: string;
+      description: string | null;
+    }) => updateTodo(id, { description }),
+    onMutate: ({ id, description }) => {
+      const previousDescription = useTodoStore
+        .getState()
+        .byId.get(id)?.description;
+      updateTodoInStore(id, { description });
+      return { id, previousDescription };
     },
-    [updateTodoDueDateMutation],
-  );
+    onError: (error, _, ctx) => {
+      if (ctx?.id)
+        updateTodoInStore(ctx.id, { description: ctx.previousDescription });
+      toast.error(getErrorMessage(error));
+    },
+  });
 
-  const handleUpdateTodoLabels = useCallback(
-    (id: string, labelIds: string[]) => {
-      if (!id) return;
-      updateTodoLabelsMutation.mutate({ id, labelIds });
+  const handleTodoMetaDataChange = useCallback(
+    ({ id, updateFields, data }: TodoMetaDataChangeDataParams) => {
+      if (!id) return toast.error("Failed to update todo, id not found!");
+      if (updateFields === "title")
+        updateTodoTitleMutation.mutate({ id, title: data.title! });
+      else if (updateFields === "dueDate")
+        updateTodoDueDateMutation.mutate({ id, dueDate: data.dueDate ?? null });
+      else if (updateFields === "labels")
+        updateTodoLabelsMutation.mutate({ id, labelIds: data.labels ?? [] });
+      else if (updateFields === "description")
+        updateTodoDescriptionMutation.mutate({
+          id,
+          description: data.description ?? null,
+        });
     },
-    [updateTodoLabelsMutation],
+    [
+      updateTodoTitleMutation,
+      updateTodoDueDateMutation,
+      updateTodoLabelsMutation,
+      updateTodoDescriptionMutation,
+    ],
   );
 
   // ── Filter actions ──
@@ -407,7 +429,7 @@ export function useTodosPage() {
       selectedLabels,
       fetchingLabels,
       labelsError: labelsError ? getErrorMessage(labelsError) : null,
-      todoIds: displayTodoIds,
+      todoIds,
       completedCount,
       activeCount,
       isCreatingTodo: createTodoMutation.isPending,
@@ -416,14 +438,13 @@ export function useTodosPage() {
       isFiltering,
       isLoadingFilters,
       filters,
+      filteredTodoIds,
     },
     actions: {
       handleCreateTodo,
       handleToggleTodo,
       handleDeleteTodo: deleteTodoMutation.mutate,
-      handleUpdateTodoTitle,
-      handleUpdateTodoDueDate,
-      handleUpdateTodoLabels,
+      handleTodoMetaDataChange,
       handleSubtaskCountChange,
       applyFilters,
       clearFilters,

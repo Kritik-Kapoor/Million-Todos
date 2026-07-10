@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { X, Plus, Loader2, Search, SlidersHorizontal } from "lucide-react";
 import { Controller } from "react-hook-form";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,9 @@ import TodosHeader from "@/features/todos/components/TodosHeader";
 import { useTodosPage } from "@/features/todos/hooks/useTodosPage";
 import { Field } from "@/components/ui/field";
 import { DateTimePicker } from "@/components/shared/inputs/date-time-picker";
-import type { DueDateFilter, TodoFilters } from "@/features/todos/api";
+import type { TodoFilters } from "@/features/todos/api";
+import { type DueDateFilter } from "@/features/todos/utils/dueDateFilterRange";
+import { useDebounce } from "@/hooks/useDebounce";
 
 const DUE_DATE_FILTER_OPTIONS: SelectOption[] = [
   { label: "Any due date", value: "any" },
@@ -40,29 +42,57 @@ const Todos = () => {
       isFiltering,
       isLoadingFilters,
       filters,
+      filteredTodoIds,
     },
     actions: {
       handleCreateTodo,
       handleToggleTodo,
       handleDeleteTodo,
-      handleUpdateTodoTitle,
-      handleUpdateTodoDueDate,
-      handleUpdateTodoLabels,
+      handleTodoMetaDataChange,
       handleSubtaskCountChange,
       applyFilters,
       clearFilters,
     },
   } = useTodosPage();
 
+  const [searchInput, setSearchInput] = useState("");
+  const debouncedSearch = useDebounce(searchInput, 300);
+  const filtersRef = useRef(filters);
+  const isSearchEffectReady = useRef(false);
+
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
+
   const updateFilter = useCallback(
     (patch: Partial<TodoFilters>) => {
-      applyFilters({ ...filters, ...patch });
+      applyFilters({
+        ...filtersRef.current,
+        ...patch,
+      });
     },
-    [filters, applyFilters],
+    [applyFilters],
   );
 
+  useEffect(() => {
+    if (!isSearchEffectReady.current) {
+      isSearchEffectReady.current = true;
+      return;
+    }
+
+    applyFilters({
+      ...filtersRef.current,
+      search: debouncedSearch.trim() || undefined,
+    });
+  }, [debouncedSearch, applyFilters]);
+
+  const handleClearFilters = useCallback(() => {
+    setSearchInput("");
+    clearFilters();
+  }, [clearFilters]);
+
   const activeFilterCount = [
-    filters.search?.trim(),
+    searchInput.trim(),
     filters.labelIds?.length,
     filters.dueDate,
   ].filter(Boolean).length;
@@ -75,7 +105,6 @@ const Todos = () => {
         completedCount={completedCount}
       />
 
-      {/* ── Create todo form ─────────────────────────────────────────────── */}
       <Card className="rounded-2xl p-4 shadow-sm sm:p-5">
         <form
           className="flex flex-col gap-3"
@@ -180,23 +209,18 @@ const Todos = () => {
         </form>
       </Card>
 
-      {/* ── Filter bar ── */}
       <Card className="rounded-2xl p-3 shadow-sm sm:p-4 gap-2">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          {/* Search */}
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              value={filters.search ?? ""}
-              onChange={(e) =>
-                updateFilter({ search: e.target.value || undefined })
-              }
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search todos..."
-              className="h-11 rounded-lg pl-9 text-sm"
+              className="h-11 rounded-xl pl-9 text-sm"
             />
           </div>
 
-          {/* Label filter */}
           <MultiSelectCount
             options={labelOptions}
             selected={labelOptions.filter((o) =>
@@ -215,7 +239,6 @@ const Todos = () => {
             className="sm:w-44"
           />
 
-          {/* Due date filter */}
           <SingleSelect
             placeholder="Filter by due date"
             options={DUE_DATE_FILTER_OPTIONS}
@@ -228,14 +251,13 @@ const Todos = () => {
             className="flex w-full h-11! rounded-xl sm:w-44"
           />
 
-          {/* Clear filters */}
           {activeFilterCount > 0 && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="h-9 shrink-0 gap-1.5 rounded-lg text-xs text-muted-foreground"
-              onClick={clearFilters}
+              onClick={handleClearFilters}
             >
               <X className="size-3.5" />
               Clear
@@ -245,33 +267,29 @@ const Todos = () => {
             </Button>
           )}
 
-          {/* Loading indicator */}
           {isLoadingFilters && (
             <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
           )}
         </div>
 
-        {/* Active filter chips */}
         {isFiltering && !isLoadingFilters && (
           <p className="text-xs text-muted-foreground">
             <SlidersHorizontal className="mr-1 inline size-3" />
-            Showing {todoIds.length} filtered{" "}
-            {todoIds.length === 1 ? "todo" : "todos"}
+            Showing {filteredTodoIds?.length} filtered{" "}
+            {filteredTodoIds?.length === 1 ? "todo" : "todos"}
           </p>
         )}
       </Card>
 
       <TodoList
-        todoIds={todoIds}
+        todoIds={filteredTodoIds ?? todoIds}
         labelOptions={labelOptions}
         fetchingLabels={fetchingLabels}
         isUpdatingTodoDueDate={isUpdatingTodoDueDate}
         isUpdatingTodoLabels={isUpdatingTodoLabels}
         onToggleTodo={handleToggleTodo}
         onDeleteTodo={handleDeleteTodo}
-        onUpdateTodoTitle={handleUpdateTodoTitle}
-        onUpdateTodoDueDate={handleUpdateTodoDueDate}
-        onUpdateTodoLabels={handleUpdateTodoLabels}
+        onTodoMetaDataChange={handleTodoMetaDataChange}
         handleSubtaskCountChange={handleSubtaskCountChange}
       />
     </div>

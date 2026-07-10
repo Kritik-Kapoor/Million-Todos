@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   createTodo,
+  deleteAllTodos,
   deleteTodo,
   getFilteredTodos,
   getTodos,
@@ -16,5 +17,6 @@ router.post("/", authenticateUser, createTodo);
 router.get("/filter", authenticateUser, getFilteredTodos);
 router.patch("/:todoId", authenticateUser, updateTodo);
 router.delete("/:todoId", authenticateUser, deleteTodo);
+router.delete("/all", authenticateUser, deleteAllTodos);
 
 export default router;

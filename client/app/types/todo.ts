@@ -16,6 +16,7 @@ export type TodoLabel = {
 export type Todo = {
   id: string;
   title: string;
+  description: string | null;
   completed: boolean;
   subtaskCount: number;
   dueDate?: string | null;
@@ -32,3 +33,14 @@ export type SubtasksResponse = ApiResponse<{
   subtasks: Subtask[];
   counts: SubtaskCounts;
 }>;
+
+export type TodoMetaDataChangeDataParams = {
+  id: string;
+  updateFields: keyof Partial<Todo>;
+  data: Partial<{
+    title?: string;
+    dueDate?: Date | null;
+    labels?: string[];
+    description?: string;
+  }>;
+};

@@ -55,3 +55,10 @@ export const updateUserPreferences = (data: NotificationPreferences) =>
     body: data,
     fallbackErrorMessage: "Failed to update user preferences",
   });
+
+export const deleteAllTodos = () =>
+  apiFetch<null>("/todos/all", {
+    method: "DELETE",
+    fallbackErrorMessage: "Failed to delete all todos",
+    responseType: "envelope",
+  });

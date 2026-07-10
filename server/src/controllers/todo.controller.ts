@@ -8,6 +8,8 @@ import {
   getErrorMessage,
 } from "../utils/apiResponse.js";
 
+const TODO_DESCRIPTION_MAX_LENGTH = 300;
+
 const LABELS_INCLUDE = {
   labels: {
     select: {
@@ -95,12 +97,29 @@ export const getFilteredTodos = async (req: Request, res: Response) => {
       : req.query.labelIds
         ? [req.query.labelIds as string]
         : [];
-    const rawDueDate = req.query.dueDate;
-    const dueDate =
-      typeof rawDueDate === "string" &&
-      ["today", "upcoming_week", "past_week", "overdue"].includes(rawDueDate)
-        ? (rawDueDate as "today" | "upcoming_week" | "past_week" | "overdue")
+    const rawDueDateFrom =
+      typeof req.query.dueDateFrom === "string"
+        ? req.query.dueDateFrom
         : undefined;
+    const rawDueDateTo =
+      typeof req.query.dueDateTo === "string" ? req.query.dueDateTo : undefined;
+
+    let dueDateFrom: Date | undefined;
+    let dueDateTo: Date | undefined;
+
+    if (rawDueDateFrom) {
+      dueDateFrom = new Date(rawDueDateFrom);
+      if (Number.isNaN(dueDateFrom.getTime())) {
+        return new ApiError(400, "Invalid dueDateFrom").send(res);
+      }
+    }
+
+    if (rawDueDateTo) {
+      dueDateTo = new Date(rawDueDateTo);
+      if (Number.isNaN(dueDateTo.getTime())) {
+        return new ApiError(400, "Invalid dueDateTo").send(res);
+      }
+    }
 
     let where = Prisma.sql`t."userId" = ${userId}`;
 
@@ -125,19 +144,12 @@ export const getFilteredTodos = async (req: Request, res: Response) => {
       )`;
     }
 
-    switch (dueDate) {
-      case "today":
-        where = Prisma.sql`${where} AND t."dueDate" >= CURRENT_DATE AND t."dueDate" < CURRENT_DATE + INTERVAL '1 day'`;
-        break;
-      case "upcoming_week":
-        where = Prisma.sql`${where} AND t."dueDate" >= CURRENT_DATE AND t."dueDate" < CURRENT_DATE + INTERVAL '1 week'`;
-        break;
-      case "past_week":
-        where = Prisma.sql`${where} AND t."dueDate" >= CURRENT_DATE - INTERVAL '1 week' AND t."dueDate" < CURRENT_DATE`;
-        break;
-      case "overdue":
-        where = Prisma.sql`${where} AND t."dueDate" IS NOT NULL AND t."dueDate" < NOW()`;
-        break;
+    if (dueDateFrom) {
+      where = Prisma.sql`${where} AND t."dueDate" >= ${dueDateFrom}`;
+    }
+
+    if (dueDateTo) {
+      where = Prisma.sql`${where} AND t."dueDate" < ${dueDateTo}`;
     }
 
     let cursor: number | undefined = undefined;
@@ -148,9 +160,6 @@ export const getFilteredTodos = async (req: Request, res: Response) => {
           ? Prisma.sql`AND t."seq" > ${cursor}`
           : Prisma.empty;
 
-      // Exclude the generated `search_vector tsvector` column — Prisma's
-      // $queryRaw cannot deserialize tsvector and will throw if it's in the result.
-      // Labels are fetched via a correlated JSON subquery to avoid N+1 queries.
       const rows: (Todo & {
         seq: bigint;
         labels: Array<{ id: string; name: string; color: string }>;
@@ -282,11 +291,12 @@ export const updateTodo = async (req: Request, res: Response) => {
       return new ApiError(400, "Todo id is required").send(res);
     }
 
-    const { title, completed, dueDate, labels } = req.body as {
+    const { title, completed, dueDate, labels, description } = req.body as {
       title?: string;
       completed?: boolean;
       dueDate?: string | null;
       labels?: string[];
+      description?: string;
     };
 
     const data: Prisma.TodoUpdateInput = {};
@@ -297,6 +307,20 @@ export const updateTodo = async (req: Request, res: Response) => {
         return new ApiError(400, "Title is required").send(res);
       }
       data.title = trimmedTitle;
+    }
+
+    if (description !== undefined) {
+      const trimmedDescription = description.trim();
+      if (!trimmedDescription) {
+        return new ApiError(400, "Description is required").send(res);
+      }
+      if (trimmedDescription.length > TODO_DESCRIPTION_MAX_LENGTH) {
+        return new ApiError(
+          400,
+          `Description must be at most ${TODO_DESCRIPTION_MAX_LENGTH} characters`,
+        ).send(res);
+      }
+      data.description = trimmedDescription;
     }
 
     if (completed !== undefined) {
@@ -349,6 +373,22 @@ export const updateTodo = async (req: Request, res: Response) => {
       formatTodoWithLabels(todo),
       "Todo updated successfully",
     ).send(res);
+  } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const deleteAllTodos = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+
+    await prisma.todo.deleteMany({
+      where: { userId },
+    });
+
+    return new ApiResponse(200, null, "All todos deleted successfully").send(
+      res,
+    );
   } catch (error) {
     return new ApiError(500, getErrorMessage(error)).send(res);
   }

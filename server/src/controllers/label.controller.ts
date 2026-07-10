@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { Prisma } from "@prisma/client";
 import {
   ApiError,
   ApiResponse,
@@ -32,6 +33,16 @@ export const createLabel = async (req: Request, res: Response) => {
 
     return new ApiResponse(201, label, "Label created successfully").send(res);
   } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return new ApiError(
+        409,
+        "A label with this name already exists",
+      ).send(res);
+    }
+
     return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };

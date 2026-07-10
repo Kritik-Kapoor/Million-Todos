@@ -12,6 +12,7 @@ import TodoRow from "./TodoRow";
 import IndexedVirtualList from "@/components/shared/IndexedVirtualList";
 import { useTodoStore } from "../store";
 import { Separator } from "@/components/ui/separator";
+import type { TodoMetaDataChangeDataParams } from "@/types/todo";
 
 type TodoListProps = {
   todoIds: string[];
@@ -21,9 +22,7 @@ type TodoListProps = {
   isUpdatingTodoLabels: boolean;
   onToggleTodo: (id: string, completed: boolean) => void;
   onDeleteTodo: (id: string) => void;
-  onUpdateTodoTitle: (id: string, title: string, previousTitle: string) => void;
-  onUpdateTodoDueDate: (id: string, dueDate: Date | null) => void;
-  onUpdateTodoLabels: (id: string, labelIds: string[]) => void;
+  onTodoMetaDataChange: (params: TodoMetaDataChangeDataParams) => void;
   handleSubtaskCountChange: (todoId: string, value: number) => void;
 };
 
@@ -39,9 +38,7 @@ const TodoList = ({
   isUpdatingTodoLabels,
   onToggleTodo,
   onDeleteTodo,
-  onUpdateTodoTitle,
-  onUpdateTodoDueDate,
-  onUpdateTodoLabels,
+  onTodoMetaDataChange,
   handleSubtaskCountChange,
 }: TodoListProps) => {
   const { density } = useUiSettings();
@@ -56,7 +53,11 @@ const TodoList = ({
 
   const handleTitleSave = (title: string) => {
     if (!selectedTodo) return;
-    onUpdateTodoTitle(selectedTodo.id, title, selectedTodo.title);
+    onTodoMetaDataChange({
+      id: selectedTodo.id,
+      updateFields: "title",
+      data: { title },
+    });
   };
 
   if (todoIds.length === 0) {
@@ -121,8 +122,7 @@ const TodoList = ({
               fetchingLabels={fetchingLabels}
               isUpdatingDueDate={isUpdatingTodoDueDate}
               isUpdatingLabels={isUpdatingTodoLabels}
-              onDueDateChange={onUpdateTodoDueDate}
-              onLabelsChange={onUpdateTodoLabels}
+              onTodoMetaDataChange={onTodoMetaDataChange}
             />
             <Separator className="my-4" />
             <SubtaskList

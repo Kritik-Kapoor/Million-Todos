@@ -1,12 +1,18 @@
-import { Download, Trash2, Upload } from "lucide-react";
+import { Download, Loader2, Trash2, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
 import DataActionCard from "./DataActionCard";
 import PanelHeader from "./PanelHeader";
+import { useDataPanel } from "../hooks/useDataPanel";
 
 const DataPanel = () => {
+  const {
+    state: { deletingAllTodos },
+    actions: { deleteAllTodos },
+  } = useDataPanel();
+
   return (
     <div className="space-y-6">
       <PanelHeader
@@ -33,9 +39,18 @@ const DataPanel = () => {
         <p className="text-xs text-muted-foreground">
           Permanently remove every todo from your account.
         </p>
-        <Button variant="destructive" size="sm">
-          <Trash2 className="h-4 w-4" />
-          Clear todos
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={() => deleteAllTodos()}
+          disabled={deletingAllTodos}
+        >
+          {deletingAllTodos ? (
+            <Loader2 className="h-4 w-4" />
+          ) : (
+            <Trash2 className="h-4 w-4" />
+          )}
+          {deletingAllTodos ? "Deleting todos..." : "Clear todos"}
         </Button>
       </div>
     </div>

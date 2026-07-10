@@ -45,9 +45,8 @@ const EditableTodoTitle = ({
     }
 
     setIsEditing(false);
-    if (trimmed !== title) {
-      onSave(trimmed);
-    }
+    if (trimmed !== title) onSave(trimmed);
+    else cancelEdit();
   };
 
   if (isEditing) {
@@ -85,7 +84,7 @@ const EditableTodoTitle = ({
     >
       {title}{" "}
       <Button variant="ghost" size="icon" onClick={startEdit}>
-        <Pen className="size-4 text-primary hidden group-hover:block" />
+        <Pen className="size-4 text-blue-500 hidden group-hover:block" />
       </Button>
     </div>
   );
