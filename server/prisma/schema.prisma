@@ -11,11 +11,30 @@ model User {
   username String
   email String @unique
   password String
+  isEmailVerified Boolean @default(false)
   dueDateReminder Boolean @default(true)
   dailyDigest Boolean @default(false)
   createdAt DateTime @default(now())
   todos Todo[]
   labels Label[]
+  tokens UserTokens[]
+}
+
+model UserTokens {
+  id String @id @default(uuid())
+  userId String
+  type TokenType
+  tokenHash String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  usedAt DateTime?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, type])
+}
+
+enum TokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
 }
 
 model Todo {
@@ -33,6 +52,7 @@ model Todo {
   subtaskCount Int @default(0)
   hasLabels Boolean @default(false)
   labels TodoLabel[]
+  reminders TodoReminder[]
   @@index([userId])
   @@index([userId, hasLabels, seq])
 }
@@ -66,4 +86,33 @@ model TodoLabel {
   label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
   @@id([todoId, labelId])
   @@index([labelId])
+}
+
+model TodoReminder {
+  id String @id @default(uuid())
+  todoId String
+  type ReminderType
+  channel ReminderChannel
+  reminderDate DateTime
+  createdAt DateTime @default(now())
+  sentAt DateTime?
+  status ReminderStatus
+  providerMessageId String?
+  todo Todo @relation(fields: [todoId], references: [id], onDelete: Cascade)
+  @@index([todoId, type, channel])
+}
+
+enum ReminderType {
+  DUE_6_HOURS
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum ReminderChannel {
+  EMAIL
+  SMS
 }

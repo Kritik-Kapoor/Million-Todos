@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -23,6 +24,7 @@ export function useApiMutation<TBody = void>(
 ): ApiMutationResult<TBody> {
   const { method = "POST", onSuccess, onError } = options;
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   const mutate = useCallback(
     async (body?: TBody): Promise<Response | null> => {
@@ -41,9 +43,12 @@ export function useApiMutation<TBody = void>(
         });
 
         const json = await response.json().catch(() => null);
-        console.log(json);
 
         if (!response.ok) {
+          if (response.status === 401) {
+            router.push("/login");
+            return null;
+          }
           onError?.(json);
         } else {
           onSuccess?.(json);
@@ -58,7 +63,7 @@ export function useApiMutation<TBody = void>(
         setLoading(false);
       }
     },
-    [method, onError, onSuccess, path],
+    [method, onError, onSuccess, path, router],
   );
 
   return { mutate, loading };

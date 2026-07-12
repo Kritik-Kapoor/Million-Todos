@@ -7,59 +7,18 @@ import {
   FieldError,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Controller, SubmitHandler, useForm } from "react-hook-form";
-import z from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { Controller } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { useState } from "react";
 import { EyeIcon, EyeOffIcon, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import { useApiMutation } from "@/hooks/useApiMutation";
-
-type LoginInputs = {
-  email: string;
-  password: string;
-};
-
-const loginFormSchema = z.object({
-  email: z.email({ message: "Invalid email address" }),
-  password: z
-    .string()
-    .transform((val) => val.trim())
-    .refine((val) => val.length > 7, {
-      message: "Password must be at least 8 characters long",
-    }),
-});
+import useLoginPage from "@/features/(auth)/hooks/useLoginPage";
 
 const LoginPage = () => {
-  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-
-  const router = useRouter();
-
-  const { mutate: login, loading } = useApiMutation<LoginInputs>(
-    "/auth/login",
-    {
-      onSuccess: () => router.push("/"),
-      onError: () => toast.error("Invalid credentials"),
-    },
-  );
-
-  const form = useForm<z.infer<typeof loginFormSchema>>({
-    resolver: zodResolver(loginFormSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
-  });
-
-  const onSubmit: SubmitHandler<LoginInputs> = async (data) => {
-    const response = await login(data);
-    if (!response)
-      toast.error("Sorry, something went wrong. Please try again.");
-  };
+  const {
+    state: { form, isPasswordVisible, loading },
+    actions: { setIsPasswordVisible, onSubmit },
+  } = useLoginPage();
 
   return (
     <div className="flex flex-col items-center justify-center h-screen px-4">
@@ -102,14 +61,14 @@ const LoginPage = () => {
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="password">Password</FieldLabel>
                   <div
-                    className={`flex items-center gap-2 border rounded-md bg-muted ${fieldState.invalid ? "border-destructive" : "border-input"}`}
+                    className={`flex items-center gap-2 border rounded-md bg-input/30 ${fieldState.invalid ? "border-destructive" : "border-input"}`}
                   >
                     <Input
                       id="password"
                       type={isPasswordVisible ? "text" : "password"}
                       autoComplete="current-password"
                       placeholder="Enter your password"
-                      className="border-none bg-transparent"
+                      className="border-none bg-transparent!"
                       {...field}
                     />
                     <Button
@@ -117,7 +76,7 @@ const LoginPage = () => {
                       variant="ghost"
                       size="icon"
                       onClick={() => setIsPasswordVisible(!isPasswordVisible)}
-                      className="bg-transparent text-muted-foreground cursor-pointer"
+                      className="text-muted-foreground cursor-pointer"
                     >
                       {isPasswordVisible ? (
                         <EyeIcon className="w-4 h-4" />
@@ -132,6 +91,12 @@ const LoginPage = () => {
                 </Field>
               )}
             />
+            <Link
+              href="/forgot-password"
+              className="text-xs text-muted-foreground text-right hover:text-blue-500"
+            >
+              Forgot password?
+            </Link>
           </FieldGroup>
           <Button type="submit" className="w-full mt-5" disabled={loading}>
             {loading ? (

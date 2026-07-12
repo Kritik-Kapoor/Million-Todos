@@ -7,67 +7,18 @@ import {
   FieldError,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Controller, SubmitHandler, useForm } from "react-hook-form";
-import z from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { Controller } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { useState } from "react";
 import { EyeIcon, EyeOffIcon, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import { useApiMutation } from "@/hooks/useApiMutation";
-
-type RegisterInputs = {
-  username: string;
-  email: string;
-  password: string;
-};
-
-const registerFormSchema = z.object({
-  username: z
-    .string()
-    .transform((val) => val.trim())
-    .refine((val) => val.length > 2, {
-      message: "Username must be at least 3 characters long",
-    }),
-  email: z.email({ message: "Invalid email address" }),
-  password: z
-    .string()
-    .transform((val) => val.trim())
-    .refine((val) => val.length > 7, {
-      message: "Password must be at least 8 characters long",
-    }),
-});
+import useRegisterPage from "@/features/(auth)/hooks/useRegisterPage";
 
 const RegisterPage = () => {
-  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-
-  const router = useRouter();
-
-  const { mutate: register, loading } = useApiMutation<RegisterInputs>(
-    "/auth/register",
-    {
-      onSuccess: () => router.push("/"),
-      onError: () => toast.error("Failed to register"),
-    },
-  );
-
-  const form = useForm<z.infer<typeof registerFormSchema>>({
-    resolver: zodResolver(registerFormSchema),
-    defaultValues: {
-      username: "",
-      email: "",
-      password: "",
-    },
-  });
-
-  const onSubmit: SubmitHandler<RegisterInputs> = async (data) => {
-    const response = await register(data);
-    if (!response)
-      toast.error("Sorry, something went wrong. Please try again.");
-  };
+  const {
+    state: { form, isPasswordVisible, loading },
+    actions: { setIsPasswordVisible, onSubmit },
+  } = useRegisterPage();
 
   return (
     <div className="flex flex-col items-center justify-center h-screen px-4">
@@ -129,14 +80,14 @@ const RegisterPage = () => {
                 <Field data-invalid={fieldState.invalid}>
                   <FieldLabel htmlFor="password">Password</FieldLabel>
                   <div
-                    className={`flex items-center gap-2 border rounded-md bg-muted ${fieldState.invalid ? "border-destructive" : "border-input"}`}
+                    className={`flex items-center gap-2 border rounded-md bg-input/30 ${fieldState.invalid ? "border-destructive" : "border-input"}`}
                   >
                     <Input
                       id="password"
                       type={isPasswordVisible ? "text" : "password"}
                       autoComplete="current-password"
                       placeholder="Enter your password"
-                      className="border-none bg-transparent"
+                      className="border-none bg-transparent!"
                       {...field}
                     />
                     <Button
@@ -144,7 +95,7 @@ const RegisterPage = () => {
                       variant="ghost"
                       size="icon"
                       onClick={() => setIsPasswordVisible(!isPasswordVisible)}
-                      className="bg-transparent text-muted-foreground cursor-pointer"
+                      className="text-muted-foreground cursor-pointer"
                     >
                       {isPasswordVisible ? (
                         <EyeIcon className="w-4 h-4" />
