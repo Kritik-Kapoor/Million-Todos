@@ -19,8 +19,9 @@ async function getCurrentUser(): Promise<CurrentUser> {
   });
 
   if (!response.ok) {
-    if (response.status === 401) redirect("/login");
-    throw new Error("Failed to fetch current user");
+    if (response.status === 401 || response.status === 404)
+      return redirect("/login");
+    else throw new Error("Failed to fetch current user");
   }
 
   const json = (await response.json()) as { data: CurrentUser };

@@ -43,15 +43,19 @@ export function useThrottledFlush<T>(
     onFlushRef.current(items);
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (timerRef.current !== null) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-      bufferRef.current = [];
-    };
+  const clear = useCallback(() => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    bufferRef.current = [];
   }, []);
 
-  return { push, flush };
+  useEffect(() => {
+    return () => {
+      clear();
+    };
+  }, [clear]);
+
+  return { push, flush, clear };
 }

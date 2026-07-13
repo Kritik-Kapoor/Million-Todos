@@ -29,8 +29,8 @@ export function dueDateFilterToRange(
       };
     case "upcoming_week":
       return {
-        from: startOfToday.toISOString(),
-        to: addDays(startOfToday, 7).toISOString(),
+        from: addDays(startOfToday, 1).toISOString(),
+        to: addDays(startOfToday, 8).toISOString(),
       };
     case "past_week":
       return {

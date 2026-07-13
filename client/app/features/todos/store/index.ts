@@ -32,12 +32,28 @@ export const useTodoStore = create<TodoStore>()((set) => ({
   },
 
   addTodoBatch: (todos) => {
+    let addedCount = 0;
     let completedDelta = 0;
+
     for (const todo of todos) {
+      const existing = _byId.get(todo.id);
+
+      if (existing) {
+        if (existing.completed !== todo.completed) {
+          completedDelta += todo.completed ? 1 : -1;
+        }
+        _byId.set(todo.id, todo);
+        continue;
+      }
+
       _byId.set(todo.id, todo);
       _allIds.push(todo.id);
+      addedCount++;
       if (todo.completed) completedDelta++;
     }
+
+    if (addedCount === 0 && completedDelta === 0) return;
+
     set((state) => ({
       version: state.version + 1,
       completedCount: state.completedCount + completedDelta,
@@ -45,9 +61,14 @@ export const useTodoStore = create<TodoStore>()((set) => ({
   },
 
   addTodo: (todo) => {
+    if (_byId.has(todo.id)) return;
+
     _byId.set(todo.id, todo);
     _allIds.push(todo.id);
-    set((state) => ({ version: state.version + 1 }));
+    set((state) => ({
+      version: state.version + 1,
+      completedCount: state.completedCount + (todo.completed ? 1 : 0),
+    }));
   },
 
   replaceTodo: (tempId, todo) => {
@@ -72,13 +93,19 @@ export const useTodoStore = create<TodoStore>()((set) => ({
   updateTodo: (id, changes) => {
     const existing = _byId.get(id);
     if (!existing) return;
+
+    const completedDelta =
+      changes.completed !== undefined &&
+      changes.completed !== existing.completed
+        ? changes.completed
+          ? 1
+          : -1
+        : 0;
+
     _byId.set(id, { ...existing, ...changes });
     set((state) => ({
       version: state.version + 1,
-      completedCount:
-        changes.completed !== undefined
-          ? state.completedCount + (changes.completed ? 1 : -1)
-          : state.completedCount,
+      completedCount: state.completedCount + completedDelta,
     }));
   },
 

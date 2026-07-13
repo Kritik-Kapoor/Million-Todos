@@ -17,6 +17,7 @@ import { DateTimePicker } from "@/components/shared/inputs/date-time-picker";
 import type { TodoFilters } from "@/features/todos/api";
 import { type DueDateFilter } from "@/features/todos/utils/dueDateFilterRange";
 import { useDebounce } from "@/hooks/useDebounce";
+import TodoListSkeleton from "@/features/todos/components/TodoListSkeleton";
 
 const DUE_DATE_FILTER_OPTIONS: SelectOption[] = [
   { label: "Any due date", value: "any" },
@@ -30,6 +31,7 @@ const Todos = () => {
   const {
     state: {
       todoIds,
+      totalCount,
       completedCount,
       activeCount,
       labelOptions,
@@ -100,7 +102,7 @@ const Todos = () => {
   return (
     <div className="flex w-full flex-col gap-6">
       <TodosHeader
-        totalCount={todoIds.length}
+        totalCount={totalCount}
         activeCount={activeCount}
         completedCount={completedCount}
       />
@@ -280,18 +282,21 @@ const Todos = () => {
           </p>
         )}
       </Card>
-
-      <TodoList
-        todoIds={filteredTodoIds ?? todoIds}
-        labelOptions={labelOptions}
-        fetchingLabels={fetchingLabels}
-        isUpdatingTodoDueDate={isUpdatingTodoDueDate}
-        isUpdatingTodoLabels={isUpdatingTodoLabels}
-        onToggleTodo={handleToggleTodo}
-        onDeleteTodo={handleDeleteTodo}
-        onTodoMetaDataChange={handleTodoMetaDataChange}
-        handleSubtaskCountChange={handleSubtaskCountChange}
-      />
+      {isLoadingFilters ? (
+        <TodoListSkeleton />
+      ) : (
+        <TodoList
+          todoIds={filteredTodoIds ?? todoIds}
+          labelOptions={labelOptions}
+          fetchingLabels={fetchingLabels}
+          isUpdatingTodoDueDate={isUpdatingTodoDueDate}
+          isUpdatingTodoLabels={isUpdatingTodoLabels}
+          onToggleTodo={handleToggleTodo}
+          onDeleteTodo={handleDeleteTodo}
+          onTodoMetaDataChange={handleTodoMetaDataChange}
+          handleSubtaskCountChange={handleSubtaskCountChange}
+        />
+      )}
     </div>
   );
 };

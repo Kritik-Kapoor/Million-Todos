@@ -62,10 +62,13 @@ export function useTodosPage() {
     incrementSubtaskCount,
   } = useTodoStore();
 
-  useTodoStore((state) => state.version);
-  const todoIds = useTodoStore.getState().allIds;
+  const { push: pushTodos, flush: flushTodos, clear: clearTodos } =
+    useThrottledFlush<Todo>(addTodoBatch, 200);
+
+  const totalCount = useTodoStore((state) => state.allIds.length);
   const completedCount = useTodoStore((state) => state.completedCount);
-  const activeCount = todoIds.length - completedCount;
+  const activeCount = totalCount - completedCount;
+  const todoIds = useTodoStore((state) => state.allIds);
 
   // ── Filter state ──
   const [filters, setFiltersState] = useState<TodoFilters>({});
@@ -98,11 +101,6 @@ export function useTodosPage() {
     control: form.control,
     name: "selectedLabels",
   });
-
-  const { push: pushTodos, flush: flushTodos } = useThrottledFlush<Todo>(
-    addTodoBatch,
-    200,
-  );
 
   useEffect(() => {
     resetTodos();
@@ -159,8 +157,11 @@ export function useTodosPage() {
     };
 
     streamTodos();
-    return () => controller.abort();
-  }, [pushTodos, flushTodos, resetTodos]);
+    return () => {
+      controller.abort();
+      clearTodos();
+    };
+  }, [pushTodos, flushTodos, clearTodos, resetTodos]);
 
   const createTodoMutation = useMutation({
     mutationFn: createTodo,
@@ -430,6 +431,7 @@ export function useTodosPage() {
       fetchingLabels,
       labelsError: labelsError ? getErrorMessage(labelsError) : null,
       todoIds,
+      totalCount,
       completedCount,
       activeCount,
       isCreatingTodo: createTodoMutation.isPending,
