@@ -37,5 +37,7 @@ export class ApiError extends Error {
     }
 }
 export function getErrorMessage(error) {
-    return error instanceof Error ? error.message : "Unknown error";
+    return error instanceof Error
+        ? error.message
+        : "Something went wrong. Please try again.";
 }

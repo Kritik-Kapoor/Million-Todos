@@ -1,35 +1,19 @@
 export const APP_NAME = "Million Todos";
-
-export function getAppUrl(): string {
-  return process.env.WEBAPP_URL ?? "http://localhost:3000";
+export function getAppUrl() {
+    return process.env.WEBAPP_URL ?? "http://localhost:3000";
 }
-
-export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+export function escapeHtml(text) {
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
 }
-
-export function buildAppUrl(path: string): string {
-  return `${getAppUrl().replace(/\/$/, "")}${path}`;
+export function buildAppUrl(path) {
+    return `${getAppUrl().replace(/\/$/, "")}${path}`;
 }
-
-type EmailShellOptions = {
-  subject: string;
-  headerTitle: string;
-  body: string;
-  footer?: string;
-};
-
-export function buildEmailShell({
-  subject,
-  headerTitle,
-  body,
-  footer = `You are receiving this email from ${APP_NAME}.`,
-}: EmailShellOptions): string {
-  return `
+export function buildEmailShell({ subject, headerTitle, body, footer = `You are receiving this email from ${APP_NAME}.`, }) {
+    return `
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -68,12 +52,10 @@ export function buildEmailShell({
 </html>
   `.trim();
 }
-
-export function buildPrimaryButton(href: string, label: string): string {
-  const safeHref = escapeHtml(href);
-  const safeLabel = escapeHtml(label);
-
-  return `
+export function buildPrimaryButton(href, label) {
+    const safeHref = escapeHtml(href);
+    const safeLabel = escapeHtml(label);
+    return `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin: 28px 0 0 0;">
       <tr>
         <td align="center">
@@ -88,11 +70,9 @@ export function buildPrimaryButton(href: string, label: string): string {
     </table>
   `;
 }
-
-export function buildFallbackLink(url: string): string {
-  const safeUrl = escapeHtml(url);
-
-  return `
+export function buildFallbackLink(url) {
+    const safeUrl = escapeHtml(url);
+    return `
     <p style="margin: 20px 0 0 0; font-size: 13px; line-height: 1.6; color: #6b7280;">
       If the button above does not work, copy and paste this link into your browser:
     </p>

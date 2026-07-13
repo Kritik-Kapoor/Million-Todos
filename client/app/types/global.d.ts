@@ -4,6 +4,7 @@ declare global {
     email: string;
     dueDateReminder: boolean;
     dailyDigest: boolean;
+    isEmailVerified: boolean;
   };
 
   type SelectOption = {

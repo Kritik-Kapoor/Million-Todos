@@ -53,6 +53,7 @@ model Todo {
   hasLabels Boolean @default(false)
   labels TodoLabel[]
   reminders TodoReminder[]
+  search_vector Unsupported("tsvector")?
   @@index([userId])
   @@index([userId, hasLabels, seq])
 }
@@ -77,6 +78,7 @@ model Label {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   todos TodoLabel[]
   @@unique([userId, name])
+  @@index([userId])
 }
 
 model TodoLabel {
@@ -104,6 +106,7 @@ model TodoReminder {
 
 enum ReminderType {
   DUE_6_HOURS
+  DAY_SUMMARY
 }
 
 enum ReminderStatus {

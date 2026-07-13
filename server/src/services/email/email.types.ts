@@ -4,6 +4,10 @@ export interface SendEmailOptions {
   html: string;
 }
 
+export type EmailSendResult =
+  | { success: true; data: unknown }
+  | { success: false; data: null; error: string };
+
 export interface DueReminderTodo {
   id: string;
   title: string;

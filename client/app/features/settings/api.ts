@@ -62,3 +62,10 @@ export const deleteAllTodos = () =>
     fallbackErrorMessage: "Failed to delete all todos",
     responseType: "envelope",
   });
+
+export const sendVerificationEmail = () =>
+  apiFetch<null>("/auth/send-verification-mail", {
+    method: "POST",
+    fallbackErrorMessage: "Failed to send verification mail",
+    responseType: "envelope",
+  });

@@ -32,19 +32,28 @@ export const registerUser = (data: {
   });
 
 export const getResetPasswordLink = (email: string) =>
-  apiFetch<null>("/auth/forgot-password", {
+  apiFetch<{ message: string }>("/auth/forgot-password", {
     method: "POST",
     body: { email },
     fallbackErrorMessage: "Failed to reset password",
+    responseType: "envelope",
   });
 
 export const resetPassword = (data: {
   resetPasswordToken: string;
   newPassword: string;
-  confirmPassword: string;
 }) =>
   apiFetch<null>("/auth/reset-password", {
     method: "POST",
     body: data,
     fallbackErrorMessage: "Failed to reset password",
   });
+
+export const verifyEmail = (data: { token: string; email: string }) =>
+  apiFetch<null>(
+    `/auth/verify-email?email=${encodeURIComponent(data.email)}&token=${encodeURIComponent(data.token)}`,
+    {
+      fallbackErrorMessage: "Failed to verify email",
+      responseType: "envelope",
+    },
+  );

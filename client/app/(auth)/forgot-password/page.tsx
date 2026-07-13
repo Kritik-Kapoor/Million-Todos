@@ -11,7 +11,7 @@ import Link from "next/link";
 
 const ForgotPasswordPage = () => {
   const {
-    state: { form, loading },
+    state: { form, loading, showSuccessMessage },
     actions: { onSubmit },
   } = useForgotPasswordPage();
 
@@ -67,6 +67,13 @@ const ForgotPasswordPage = () => {
             Login
           </Link>
         </p>
+        {showSuccessMessage && (
+          <div className="bg-blue-500/10 border border-blue-500/30 px-2 py-1 rounded-xl">
+            <p className="text-foreground text-sm text-center">
+              {showSuccessMessage}
+            </p>
+          </div>
+        )}
       </Card>
     </div>
   );

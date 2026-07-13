@@ -1,23 +1,34 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "../config/db.js";
-import { generateToken } from "../utils/generateToken.js";
+import { generateHashedToken, generateOtp, generateRandomToken, generateToken, } from "../utils/generateToken.js";
 import { ApiError, ApiResponse, getErrorMessage, } from "../utils/apiResponse.js";
+import { TokenType } from "@prisma/client";
+import { emailService } from "../services/email/email.service.js";
+import { parseDurationMs } from "../utils/dateTime.js";
+const USER_RETURN_OPTIONS = {
+    username: true,
+    email: true,
+    dueDateReminder: true,
+    dailyDigest: true,
+};
 export const Register = async (req, res) => {
     try {
         const { username, email, password } = req.body;
         const userExists = await prisma.user.findUnique({
             where: { email },
         });
-        if (userExists) {
+        if (userExists)
             return new ApiError(400, "User with this email already exists").send(res);
-        }
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+        if (password.length < 8)
+            return new ApiError(400, "Password must be at least 8 characters long").send(res);
+        const hashedPassword = await bcrypt.hash(password, 10);
         const user = await prisma.user.create({
             data: { username, email, password: hashedPassword },
+            select: { id: true, ...USER_RETURN_OPTIONS },
         });
         generateToken(user.id, res);
-        return new ApiResponse(201, { id: user.id, username, email }, "User created successfully").send(res);
+        const { id, ...publicUserDetails } = user;
+        return new ApiResponse(201, publicUserDetails, "User created successfully").send(res);
     }
     catch (error) {
         return new ApiError(500, getErrorMessage(error)).send(res);
@@ -28,16 +39,16 @@ export const Login = async (req, res) => {
         const { email, password } = req.body;
         const user = await prisma.user.findUnique({
             where: { email },
+            select: { id: true, password: true, ...USER_RETURN_OPTIONS },
         });
-        if (!user) {
+        if (!user)
             return new ApiError(401, "Invalid email or password").send(res);
-        }
         const isPasswordValid = await bcrypt.compare(password, user.password);
-        if (!isPasswordValid) {
+        if (!isPasswordValid)
             return new ApiError(401, "Invalid email or password").send(res);
-        }
         generateToken(user.id, res);
-        return new ApiResponse(200, { id: user.id, email }, "User logged in successfully").send(res);
+        const { id, password: _, ...publicUserDetails } = user;
+        return new ApiResponse(200, publicUserDetails, "User logged in successfully").send(res);
     }
     catch (error) {
         return new ApiError(500, getErrorMessage(error)).send(res);
@@ -58,16 +69,239 @@ export const Logout = async (_, res) => {
 export const getUser = async (req, res) => {
     try {
         const userId = req.user.userId;
-        if (!userId) {
-            return new ApiError(401, "Unauthorized user").send(res);
-        }
         const user = await prisma.user.findUnique({
             where: { id: userId },
+            select: USER_RETURN_OPTIONS,
+        });
+        if (!user)
+            return new ApiError(404, "User not found").send(res);
+        return new ApiResponse(200, user, "User fetched successfully").send(res);
+    }
+    catch (error) {
+        return new ApiError(500, getErrorMessage(error)).send(res);
+    }
+};
+export const updateUser = async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const { username, password } = req.body;
+        if (!username)
+            return new ApiError(400, "Display name is required").send(res);
+        const updateData = {
+            username,
+        };
+        if (password) {
+            if (password.length < 8) {
+                return new ApiError(400, "Password must be at least 8 characters long").send(res);
+            }
+            const salt = await bcrypt.genSalt(10);
+            updateData.password = await bcrypt.hash(password, salt);
+        }
+        const user = await prisma.user.update({
+            where: { id: userId },
+            data: updateData,
+            select: USER_RETURN_OPTIONS,
+        });
+        return new ApiResponse(200, user, "Account updated successfully").send(res);
+    }
+    catch (error) {
+        return new ApiError(500, getErrorMessage(error)).send(res);
+    }
+};
+export const updateUserPreferences = async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const { dueDateReminder, dailyDigest } = req.body;
+        if (dueDateReminder === undefined || dailyDigest === undefined) {
+            return new ApiError(400, "Invalid input, both dueDateReminder and dailyDigest must be provided").send(res);
+        }
+        const user = await prisma.user.update({
+            where: { id: userId },
+            data: req.body,
+            select: USER_RETURN_OPTIONS,
+        });
+        return new ApiResponse(200, user, "User preferences updated successfully").send(res);
+    }
+    catch (error) {
+        return new ApiError(500, getErrorMessage(error)).send(res);
+    }
+};
+export const forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const user = await prisma.user.findFirst({
+            where: { email },
         });
         if (!user) {
-            return new ApiError(404, "User not found").send(res);
+            return new ApiResponse(200, null, "If an account with that email exists, we've sent a password reset link.").send(res);
         }
-        return new ApiResponse(200, { id: user.id, username: user.username, email: user.email }, "User fetched successfully").send(res);
+        const rawToken = generateRandomToken();
+        const tokenHash = generateHashedToken(rawToken);
+        const storeToken = await prisma.$transaction(async (tx) => {
+            await tx.userTokens.deleteMany({
+                where: {
+                    userId: user.id,
+                    type: TokenType.PASSWORD_RESET,
+                    usedAt: null,
+                },
+            });
+            return await tx.userTokens.create({
+                data: {
+                    userId: user.id,
+                    type: TokenType.PASSWORD_RESET,
+                    tokenHash,
+                    expiresAt: new Date(Date.now() +
+                        parseDurationMs(process.env.RESET_PASSWORD_EXPIRES_IN ?? "15m")),
+                },
+            });
+        });
+        if (!storeToken)
+            return new ApiError(500, "Failed to generate password reset mail").send(res);
+        //TODO: Use user.email after domain been setup in Resend
+        const { success } = await emailService.sendPasswordResetEmail({
+            to: "kritik0401@gmail.com", //user.email,
+            username: user.username,
+            passwordResetToken: rawToken,
+        });
+        if (!success)
+            return new ApiError(500, "Failed to send password reset email").send(res);
+        return new ApiResponse(200, null, "If an account with that email exists, we've sent a password reset link.").send(res);
+    }
+    catch (error) {
+        return new ApiError(500, getErrorMessage(error)).send(res);
+    }
+};
+export const resetPassword = async (req, res) => {
+    try {
+        const { resetPasswordToken, newPassword } = req.body;
+        if (!resetPasswordToken || !newPassword)
+            return new ApiError(400, "Failed to reset password. Token and password are required").send(res);
+        if (newPassword.length < 8)
+            return new ApiError(400, "Password must be at least 8 characters long").send(res);
+        const tokenHash = generateHashedToken(resetPasswordToken);
+        const isTokenValid = await prisma.userTokens.findFirst({
+            where: {
+                tokenHash,
+                type: TokenType.PASSWORD_RESET,
+                usedAt: null,
+                expiresAt: { gt: new Date() },
+            },
+        });
+        if (!isTokenValid) {
+            return new ApiError(400, "Invalid or expired link").send(res);
+        }
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await prisma.$transaction([
+            prisma.user.update({
+                where: { id: isTokenValid.userId },
+                data: { password: hashedPassword },
+            }),
+            prisma.userTokens.updateMany({
+                where: {
+                    userId: isTokenValid.userId,
+                    type: TokenType.PASSWORD_RESET,
+                    usedAt: null,
+                },
+                data: { usedAt: new Date() },
+            }),
+        ]);
+        return new ApiResponse(200, null, "Password reset successfully").send(res);
+    }
+    catch (error) {
+        return new ApiError(500, getErrorMessage(error)).send(res);
+    }
+};
+export const sendVerificationMail = async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { email: true, username: true, isEmailVerified: true },
+        });
+        if (!user)
+            return new ApiError(404, "User not found").send(res);
+        if (user.isEmailVerified)
+            return new ApiError(400, "Email already verified").send(res);
+        const verificationToken = generateOtp();
+        const hashedVerificationToken = generateHashedToken(verificationToken);
+        const storeToken = await prisma.$transaction(async (tx) => {
+            await tx.userTokens.deleteMany({
+                where: {
+                    userId,
+                    type: TokenType.EMAIL_VERIFICATION,
+                    usedAt: null,
+                },
+            });
+            return await tx.userTokens.create({
+                data: {
+                    userId,
+                    type: TokenType.EMAIL_VERIFICATION,
+                    tokenHash: hashedVerificationToken,
+                    expiresAt: new Date(Date.now() +
+                        parseDurationMs(process.env.EMAIL_VERIFICATION_EXPIRES_IN ?? "1hr")),
+                },
+            });
+        });
+        if (!storeToken)
+            return new ApiError(500, "Failed to generate verification mail").send(res);
+        const { success } = await emailService.sendVerificationEmail({
+            to: user.email,
+            username: user.username,
+            verificationToken,
+        });
+        if (!success)
+            return new ApiError(500, "Failed to send verification email").send(res);
+        return new ApiResponse(200, null, "Verification email sent").send(res);
+    }
+    catch (error) {
+        return new ApiError(500, getErrorMessage(error)).send(res);
+    }
+};
+export const verifyAccount = async (req, res) => {
+    try {
+        const { token, email } = req.body;
+        if (!token || !email) {
+            return new ApiError(400, "Token and email are required").send(res);
+        }
+        const user = await prisma.user.findUnique({
+            where: { email },
+            select: { id: true, isEmailVerified: true },
+        });
+        if (!user) {
+            return new ApiError(400, "Invalid or expired link").send(res);
+        }
+        if (user.isEmailVerified) {
+            return new ApiResponse(200, null, "Account already verified").send(res);
+        }
+        const tokenHash = generateHashedToken(token);
+        const isTokenValid = await prisma.userTokens.findFirst({
+            where: {
+                userId: user.id,
+                tokenHash,
+                type: TokenType.EMAIL_VERIFICATION,
+                usedAt: null,
+                expiresAt: { gt: new Date() },
+            },
+            orderBy: { createdAt: "desc" },
+        });
+        if (!isTokenValid) {
+            return new ApiError(400, "Invalid or expired link").send(res);
+        }
+        await prisma.$transaction(async (tx) => {
+            await tx.user.update({
+                where: { id: user.id },
+                data: { isEmailVerified: true },
+            });
+            await tx.userTokens.updateMany({
+                where: {
+                    userId: user.id,
+                    type: TokenType.EMAIL_VERIFICATION,
+                    usedAt: null,
+                },
+                data: { usedAt: new Date() },
+            });
+        });
+        return new ApiResponse(200, null, "Account verified").send(res);
     }
     catch (error) {
         return new ApiError(500, getErrorMessage(error)).send(res);

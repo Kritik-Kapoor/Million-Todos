@@ -1,5 +1,11 @@
+import { Prisma } from "@prisma/client";
 import { ApiError, ApiResponse, getErrorMessage, } from "../utils/apiResponse.js";
 import { prisma } from "../config/db.js";
+const LABEL_RETURN_OPTIONS = {
+    id: true,
+    name: true,
+    color: true,
+};
 export const createLabel = async (req, res) => {
     try {
         const userId = req.user.userId;
@@ -13,10 +19,15 @@ export const createLabel = async (req, res) => {
                 name,
                 color,
             },
+            select: LABEL_RETURN_OPTIONS,
         });
-        return new ApiResponse(201, { label }, "Label created successfully").send(res);
+        return new ApiResponse(201, label, "Label created successfully").send(res);
     }
     catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2002") {
+            return new ApiError(409, "A label with this name already exists").send(res);
+        }
         return new ApiError(500, getErrorMessage(error)).send(res);
     }
 };
@@ -25,8 +36,9 @@ export const getLabels = async (req, res) => {
         const userId = req.user.userId;
         const labels = await prisma.label.findMany({
             where: { userId },
+            select: LABEL_RETURN_OPTIONS,
         });
-        return new ApiResponse(200, { labels }, "Labels fetched successfully").send(res);
+        return new ApiResponse(200, labels, "Labels fetched successfully").send(res);
     }
     catch (error) {
         return new ApiError(500, getErrorMessage(error)).send(res);
@@ -41,8 +53,9 @@ export const updateLabel = async (req, res) => {
         const label = await prisma.label.update({
             where: { id: labelId, userId },
             data: req.body,
+            select: LABEL_RETURN_OPTIONS,
         });
-        return new ApiResponse(200, { label }, "Label updated successfully").send(res);
+        return new ApiResponse(200, label, "Label updated successfully").send(res);
     }
     catch (error) {
         return new ApiError(500, getErrorMessage(error)).send(res);

@@ -1,5 +1,7 @@
 import { resend } from "../../config/resend.js";
+import { getErrorMessage } from "../../utils/apiResponse.js";
 import {
+  type EmailSendResult,
   SendDueReminderOptions,
   SendEmailOptions,
   SendPasswordResetEmailOptions,
@@ -10,7 +12,7 @@ import { buildPasswordResetEmailTemplate } from "./templates/passwordReset.templ
 import { buildVerificationEmailTemplate } from "./templates/verificationEmail.template.js";
 
 export class EmailService {
-  async sendEmail(options: SendEmailOptions) {
+  async sendEmail(options: SendEmailOptions): Promise<EmailSendResult> {
     try {
       const { data, error } = await resend.emails.send({
         from: process.env.EMAIL_FROM!,
@@ -18,26 +20,33 @@ export class EmailService {
       });
 
       if (error) {
-        return console.error(error);
+        console.error("Failed to send mail", error);
+        return { success: false, data: null, error: getErrorMessage(error) };
       }
 
-      return data;
+      return { success: true, data };
     } catch (error) {
-      return console.error(error);
+      console.error("Failed to send mail", error);
+      return { success: false, data: null, error: getErrorMessage(error) };
     }
   }
 
-  async sendDueReminder(options: SendDueReminderOptions) {
+  async sendDueReminder(
+    options: SendDueReminderOptions,
+  ): Promise<EmailSendResult> {
     try {
       const { to, username, todos } = options;
       const { subject, html } = buildDueReminderTemplate(username, todos);
-      await this.sendEmail({ to: [to], subject, html });
+      return await this.sendEmail({ to: [to], subject, html });
     } catch (error) {
-      return console.error(error);
+      console.error(error);
+      return { success: false, data: null, error: getErrorMessage(error) };
     }
   }
 
-  async sendVerificationEmail(options: SendVerificationEmailOptions) {
+  async sendVerificationEmail(
+    options: SendVerificationEmailOptions,
+  ): Promise<EmailSendResult> {
     try {
       const { to, username, verificationToken } = options;
       const { subject, html } = buildVerificationEmailTemplate(
@@ -45,22 +54,26 @@ export class EmailService {
         username,
         verificationToken,
       );
-      await this.sendEmail({ to: [to], subject, html });
+      return await this.sendEmail({ to: [to], subject, html });
     } catch (error) {
-      return console.error(error);
+      console.error(error);
+      return { success: false, data: null, error: getErrorMessage(error) };
     }
   }
 
-  async sendPasswordResetEmail(options: SendPasswordResetEmailOptions) {
+  async sendPasswordResetEmail(
+    options: SendPasswordResetEmailOptions,
+  ): Promise<EmailSendResult> {
     try {
       const { to, username, passwordResetToken } = options;
       const { subject, html } = buildPasswordResetEmailTemplate(
         username,
         passwordResetToken,
       );
-      await this.sendEmail({ to: [to], subject, html });
+      return await this.sendEmail({ to: [to], subject, html });
     } catch (error) {
-      return console.error(error);
+      console.error(error);
+      return { success: false, data: null, error: getErrorMessage(error) };
     }
   }
 }

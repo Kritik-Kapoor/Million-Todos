@@ -3,14 +3,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { type SubmitHandler, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-
 import getErrorMessage from "@/lib/utils/getErrorMessage";
-
-import { updateAccount } from "../api";
+import { sendVerificationEmail, updateAccount } from "../api";
 import type { UpdateAccountPayload } from "../types";
 
 const accountFormSchema = z
@@ -49,6 +47,9 @@ type UseAccountPanelOptions = {
 };
 
 export function useAccountPanel({ user }: UseAccountPanelOptions) {
+  const [verificationEmailSent, setVerificationEmailSent] = useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+
   const router = useRouter();
 
   const form = useForm<AccountFormValues>({
@@ -75,15 +76,23 @@ export function useAccountPanel({ user }: UseAccountPanelOptions) {
     onError: (error) => toast.error(getErrorMessage(error)),
   });
 
+  const sendVerificationEmailMutation = useMutation({
+    mutationFn: sendVerificationEmail,
+    onSuccess: () => setVerificationEmailSent(true),
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
   const onSubmit: SubmitHandler<AccountFormValues> = useCallback(
     (data) => {
       const payload: UpdateAccountPayload = {
         username: data.username.trim(),
       };
 
-      const trimmedPassword = data.newPassword.trim();
-      if (trimmedPassword) {
-        payload.password = trimmedPassword;
+      const newPassword = data.newPassword.trim();
+      const confirmPassword = data.confirmPassword.trim();
+
+      if (newPassword && confirmPassword) {
+        payload.password = newPassword;
       }
 
       updateMutation.mutate(payload);
@@ -91,15 +100,20 @@ export function useAccountPanel({ user }: UseAccountPanelOptions) {
     [updateMutation],
   );
 
-  const handleSubmit = form.handleSubmit(onSubmit);
-
   return {
     state: {
       email: user.email,
       form,
       isValid: form.formState.isValid,
       isSubmitting: updateMutation.isPending,
+      isPasswordVisible,
+      verificationEmailSent,
+      isSendingVerificationEmail: sendVerificationEmailMutation.isPending,
     },
-    actions: { handleSubmit },
+    actions: {
+      onSubmit,
+      setIsPasswordVisible,
+      sendVerificationEmail: sendVerificationEmailMutation.mutateAsync,
+    },
   };
 }

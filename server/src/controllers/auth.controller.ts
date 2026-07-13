@@ -1,12 +1,20 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { prisma } from "../config/db.js";
-import { generateToken } from "../utils/generateToken.js";
+import {
+  generateHashedToken,
+  generateOtp,
+  generateRandomToken,
+  generateToken,
+} from "../utils/generateToken.js";
 import {
   ApiError,
   ApiResponse,
   getErrorMessage,
 } from "../utils/apiResponse.js";
+import { TokenType } from "@prisma/client";
+import { emailService } from "../services/email/email.service.js";
+import { parseDurationMs } from "../utils/dateTime.js";
 
 type RegisterBody = {
   username: string;
@@ -24,6 +32,7 @@ const USER_RETURN_OPTIONS = {
   email: true,
   dueDateReminder: true,
   dailyDigest: true,
+  isEmailVerified: true,
 } as const;
 
 export const Register = async (req: Request, res: Response) => {
@@ -34,19 +43,16 @@ export const Register = async (req: Request, res: Response) => {
       where: { email },
     });
 
-    if (userExists) {
+    if (userExists)
       return new ApiError(400, "User with this email already exists").send(res);
-    }
 
-    if (password.length < 8) {
+    if (password.length < 8)
       return new ApiError(
         400,
         "Password must be at least 8 characters long",
       ).send(res);
-    }
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await prisma.user.create({
       data: { username, email, password: hashedPassword },
@@ -76,15 +82,12 @@ export const Login = async (req: Request, res: Response) => {
       select: { id: true, password: true, ...USER_RETURN_OPTIONS },
     });
 
-    if (!user) {
-      return new ApiError(401, "Invalid email or password").send(res);
-    }
+    if (!user) return new ApiError(401, "Invalid email or password").send(res);
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
-    if (!isPasswordValid) {
+    if (!isPasswordValid)
       return new ApiError(401, "Invalid email or password").send(res);
-    }
 
     generateToken(user.id, res);
 
@@ -121,9 +124,7 @@ export const getUser = async (req: Request, res: Response) => {
       select: USER_RETURN_OPTIONS,
     });
 
-    if (!user) {
-      return new ApiError(404, "User not found").send(res);
-    }
+    if (!user) return new ApiError(404, "User not found").send(res);
 
     return new ApiResponse(200, user, "User fetched successfully").send(res);
   } catch (error) {
@@ -139,9 +140,8 @@ export const updateUser = async (req: Request, res: Response) => {
       password?: string;
     };
 
-    if (!username) {
+    if (!username)
       return new ApiError(400, "Display name is required").send(res);
-    }
 
     const updateData: { username: string; password?: string } = {
       username,
@@ -155,8 +155,7 @@ export const updateUser = async (req: Request, res: Response) => {
         ).send(res);
       }
 
-      const salt = await bcrypt.genSalt(10);
-      updateData.password = await bcrypt.hash(password, salt);
+      updateData.password = await bcrypt.hash(password, 10);
     }
 
     const user = await prisma.user.update({
@@ -197,6 +196,242 @@ export const updateUserPreferences = async (req: Request, res: Response) => {
       user,
       "User preferences updated successfully",
     ).send(res);
+  } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const forgotPassword = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body as { email: string };
+
+    const user = await prisma.user.findFirst({
+      where: { email },
+    });
+
+    if (!user) {
+      return new ApiResponse(
+        200,
+        null,
+        "If an account with that email exists, we've sent a password reset link.",
+      ).send(res);
+    }
+
+    const rawToken = generateRandomToken();
+    const tokenHash = generateHashedToken(rawToken);
+
+    const storeToken = await prisma.$transaction(async (tx) => {
+      await tx.userTokens.deleteMany({
+        where: {
+          userId: user.id,
+          type: TokenType.PASSWORD_RESET,
+          usedAt: null,
+        },
+      });
+      return await tx.userTokens.create({
+        data: {
+          userId: user.id,
+          type: TokenType.PASSWORD_RESET,
+          tokenHash,
+          expiresAt: new Date(
+            Date.now() +
+              parseDurationMs(process.env.RESET_PASSWORD_EXPIRES_IN ?? "15m"),
+          ),
+        },
+      });
+    });
+
+    if (!storeToken)
+      return new ApiError(500, "Failed to generate password reset mail").send(
+        res,
+      );
+
+    //TODO: Use user.email after domain been setup in Resend
+    const { success } = await emailService.sendPasswordResetEmail({
+      to: "kritik0401@gmail.com", //user.email,
+      username: user.username,
+      passwordResetToken: rawToken,
+    });
+
+    if (!success)
+      return new ApiError(500, "Failed to send password reset email").send(res);
+
+    return new ApiResponse(
+      200,
+      null,
+      "If an account with that email exists, we've sent a password reset link.",
+    ).send(res);
+  } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const resetPassword = async (req: Request, res: Response) => {
+  try {
+    const { resetPasswordToken, newPassword } = req.body as {
+      resetPasswordToken: string;
+      newPassword: string;
+    };
+
+    if (!resetPasswordToken || !newPassword)
+      return new ApiError(
+        400,
+        "Failed to reset password. Token and password are required",
+      ).send(res);
+
+    if (newPassword.length < 8)
+      return new ApiError(
+        400,
+        "Password must be at least 8 characters long",
+      ).send(res);
+
+    const tokenHash = generateHashedToken(resetPasswordToken);
+
+    const isTokenValid = await prisma.userTokens.findFirst({
+      where: {
+        tokenHash,
+        type: TokenType.PASSWORD_RESET,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+    });
+
+    if (!isTokenValid) {
+      return new ApiError(400, "Invalid or expired link").send(res);
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: isTokenValid.userId },
+        data: { password: hashedPassword },
+      }),
+      prisma.userTokens.updateMany({
+        where: {
+          userId: isTokenValid.userId,
+          type: TokenType.PASSWORD_RESET,
+          usedAt: null,
+        },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+
+    return new ApiResponse(200, null, "Password reset successfully").send(res);
+  } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const sendVerificationMail = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, username: true, isEmailVerified: true },
+    });
+
+    if (!user) return new ApiError(404, "User not found").send(res);
+
+    if (user.isEmailVerified)
+      return new ApiError(400, "Email already verified").send(res);
+
+    const verificationToken = generateOtp();
+    const hashedVerificationToken = generateHashedToken(verificationToken);
+
+    const storeToken = await prisma.$transaction(async (tx) => {
+      await tx.userTokens.deleteMany({
+        where: {
+          userId,
+          type: TokenType.EMAIL_VERIFICATION,
+          usedAt: null,
+        },
+      });
+      return await tx.userTokens.create({
+        data: {
+          userId,
+          type: TokenType.EMAIL_VERIFICATION,
+          tokenHash: hashedVerificationToken,
+          expiresAt: new Date(
+            Date.now() +
+              parseDurationMs(
+                process.env.EMAIL_VERIFICATION_EXPIRES_IN ?? "1hr",
+              ),
+          ),
+        },
+      });
+    });
+
+    if (!storeToken)
+      return new ApiError(500, "Failed to generate verification mail").send(
+        res,
+      );
+
+    //TODO: Use user.email after domain been setup in Resend
+    const { success } = await emailService.sendVerificationEmail({
+      to: user.email,
+      username: user.username,
+      verificationToken,
+    });
+
+    if (!success)
+      return new ApiError(500, "Failed to send verification email").send(res);
+
+    return new ApiResponse(200, null, "Verification email sent").send(res);
+  } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const verifyAccount = async (req: Request, res: Response) => {
+  try {
+    const { token, email } = req.query as { token: string; email: string };
+
+    if (!token || !email)
+      return new ApiError(400, "Token and email are required").send(res);
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, isEmailVerified: true },
+    });
+
+    if (!user) return new ApiError(400, "Invalid or expired link").send(res);
+
+    if (user.isEmailVerified)
+      return new ApiResponse(200, null, "Account already verified").send(res);
+
+    const tokenHash = generateHashedToken(token);
+
+    const isTokenValid = await prisma.userTokens.findFirst({
+      where: {
+        userId: user.id,
+        type: TokenType.EMAIL_VERIFICATION,
+        tokenHash,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+    });
+
+    if (!isTokenValid)
+      return new ApiError(400, "Invalid or expired link").send(res);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: { isEmailVerified: true },
+      });
+      await tx.userTokens.updateMany({
+        where: {
+          userId: user.id,
+          type: TokenType.EMAIL_VERIFICATION,
+          usedAt: null,
+        },
+        data: { usedAt: new Date() },
+      });
+    });
+
+    return new ApiResponse(200, null, "Account verified").send(res);
   } catch (error) {
     return new ApiError(500, getErrorMessage(error)).send(res);
   }

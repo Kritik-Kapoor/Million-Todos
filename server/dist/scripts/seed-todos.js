@@ -11,7 +11,6 @@ const seedTodos = async () => {
                 title: `Todo ${i + index + 1}`,
                 description: `Description for Todo ${i + index + 1}`,
                 completed: false,
-                seq: i + index + 1,
             }));
             await prisma.todo.createMany({
                 data: batch,

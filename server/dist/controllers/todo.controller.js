@@ -1,5 +1,20 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../config/db.js";
 import { ApiError, ApiResponse, getErrorMessage, } from "../utils/apiResponse.js";
+const TODO_DESCRIPTION_MAX_LENGTH = 300;
+const LABELS_INCLUDE = {
+    labels: {
+        select: {
+            label: { select: { id: true, name: true, color: true } },
+        },
+    },
+};
+function formatTodoWithLabels({ labels: todoLabels, ...todo }) {
+    return {
+        ...todo,
+        labels: todoLabels.map(({ label }) => label),
+    };
+}
 export const getTodos = async (req, res) => {
     const BATCH_SIZE = 5000;
     res.setHeader("Content-Type", "application/x-ndjson");
@@ -14,12 +29,16 @@ export const getTodos = async (req, res) => {
                 where: { userId },
                 take: BATCH_SIZE,
                 orderBy: { seq: "asc" },
+                include: LABELS_INCLUDE,
                 ...(cursor !== undefined ? { skip: 1, cursor: { seq: cursor } } : {}),
             });
             if (todos.length === 0)
                 break;
-            for (const todo of todos) {
-                res.write(JSON.stringify(todo) + "\n");
+            for (const { labels: todoLabels, ...todo } of todos) {
+                res.write(JSON.stringify({
+                    ...todo,
+                    labels: todoLabels.map(({ label }) => label),
+                }) + "\n");
             }
             cursor = todos[todos.length - 1].seq;
             // Fewer rows than requested means we've reached the last batch
@@ -33,12 +52,160 @@ export const getTodos = async (req, res) => {
             new ApiError(500, message).send(res);
         }
         else {
-            // Mid-stream error — send a sentinel error line so the client knows
+            // Mid-stream error
             res.write(JSON.stringify({ error: message }) + "\n");
         }
     }
     finally {
         res.end();
+    }
+};
+export const getFilteredTodos = async (req, res) => {
+    const BATCH_SIZE = 5000;
+    res.setHeader("Content-Type", "application/x-ndjson");
+    res.setHeader("Transfer-Encoding", "chunked");
+    res.setHeader("Cache-Control", "no-cache");
+    try {
+        const userId = req.user.userId;
+        const search = typeof req.query.search === "string" ? req.query.search : undefined;
+        const labelIds = Array.isArray(req.query.labelIds)
+            ? req.query.labelIds
+            : req.query.labelIds
+                ? [req.query.labelIds]
+                : [];
+        const rawDueDateFrom = typeof req.query.dueDateFrom === "string"
+            ? req.query.dueDateFrom
+            : undefined;
+        const rawDueDateTo = typeof req.query.dueDateTo === "string" ? req.query.dueDateTo : undefined;
+        let dueDateFrom;
+        let dueDateTo;
+        if (rawDueDateFrom) {
+            dueDateFrom = new Date(rawDueDateFrom);
+            if (Number.isNaN(dueDateFrom.getTime())) {
+                return new ApiError(400, "Invalid dueDateFrom").send(res);
+            }
+        }
+        if (rawDueDateTo) {
+            dueDateTo = new Date(rawDueDateTo);
+            if (Number.isNaN(dueDateTo.getTime())) {
+                return new ApiError(400, "Invalid dueDateTo").send(res);
+            }
+        }
+        let where = Prisma.sql `t."userId" = ${userId}`;
+        if (search?.trim()) {
+            const tsquery = search
+                .trim()
+                .split(/\s+/)
+                .map((word) => `${word}:*`)
+                .join(" & ");
+            where = Prisma.sql `${where} AND t.search_vector @@ to_tsquery('english', ${tsquery})`;
+        }
+        if (labelIds.length > 0) {
+            const idSqls = labelIds.map((id) => Prisma.sql `${id}`);
+            const inList = idSqls
+                .slice(1)
+                .reduce((acc, cur) => Prisma.sql `${acc}, ${cur}`, idSqls[0]);
+            where = Prisma.sql `${where} AND EXISTS (
+        SELECT 1 FROM "TodoLabel" tl
+        WHERE tl."todoId" = t.id
+          AND tl."labelId" IN (${inList})
+      )`;
+        }
+        if (dueDateFrom) {
+            where = Prisma.sql `${where} AND t."dueDate" >= ${dueDateFrom}`;
+        }
+        if (dueDateTo) {
+            where = Prisma.sql `${where} AND t."dueDate" < ${dueDateTo}`;
+        }
+        let cursor = undefined;
+        while (true) {
+            const cursorClause = cursor !== undefined
+                ? Prisma.sql `AND t."seq" > ${cursor}`
+                : Prisma.empty;
+            const rows = await prisma.$queryRaw `
+        SELECT
+          t."id", t."seq", t."userId", t."title", t."description",
+          t."completed", t."dueDate", t."createdAt", t."updatedAt",
+          t."subtaskCount", t."hasLabels",
+          COALESCE(
+            (
+              SELECT json_agg(json_build_object('id', l."id", 'name', l."name", 'color', l."color"))
+              FROM "TodoLabel" tl
+              JOIN "Label" l ON tl."labelId" = l."id"
+              WHERE tl."todoId" = t."id"
+            ),
+            '[]'::json
+          ) AS labels
+        FROM "Todo" t
+        WHERE ${where} ${cursorClause}
+        ORDER BY t."seq" ASC
+        LIMIT ${BATCH_SIZE}
+      `;
+            if (rows.length === 0)
+                break;
+            for (const todo of rows) {
+                res.write(JSON.stringify(todo) + "\n");
+            }
+            cursor = rows[rows.length - 1].seq;
+            if (rows.length < BATCH_SIZE)
+                break;
+        }
+    }
+    catch (error) {
+        const message = getErrorMessage(error);
+        if (!res.headersSent) {
+            new ApiError(500, message).send(res);
+        }
+        else {
+            res.write(JSON.stringify({ error: message }) + "\n");
+        }
+    }
+    finally {
+        res.end();
+    }
+};
+export const createTodo = async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const { title, labels, dueDate } = req.body;
+        const trimmedTitle = typeof title === "string" ? title.trim() : "";
+        if (!trimmedTitle) {
+            return new ApiError(400, "Title is required").send(res);
+        }
+        const labelIds = Array.isArray(labels)
+            ? [...new Set(labels.filter((id) => typeof id === "string" && id))]
+            : [];
+        if (labelIds.length > 0) {
+            const ownedLabels = await prisma.label.findMany({
+                where: { userId, id: { in: labelIds } },
+                select: { id: true },
+            });
+            if (ownedLabels.length !== labelIds.length) {
+                return new ApiError(400, "One or more labels are invalid").send(res);
+            }
+        }
+        const todo = await prisma.todo.create({
+            data: {
+                userId,
+                title: trimmedTitle,
+                hasLabels: labelIds.length > 0,
+                ...(dueDate && {
+                    dueDate: new Date(dueDate),
+                }),
+                ...(labelIds.length > 0 && {
+                    labels: {
+                        create: labelIds.map((labelId) => ({
+                            label: { connect: { id: labelId } },
+                        })),
+                    },
+                }),
+            },
+            include: LABELS_INCLUDE,
+        });
+        return new ApiResponse(201, formatTodoWithLabels(todo), "Todo created successfully").send(res);
+    }
+    catch (error) {
+        return new ApiError(500, getErrorMessage(error)).send(res);
     }
 };
 export const deleteTodo = async (req, res) => {
@@ -64,119 +231,75 @@ export const updateTodo = async (req, res) => {
         if (!todoId) {
             return new ApiError(400, "Todo id is required").send(res);
         }
+        const { title, completed, dueDate, labels, description } = req.body;
+        const data = {};
+        if (title !== undefined) {
+            const trimmedTitle = title.trim();
+            if (!trimmedTitle) {
+                return new ApiError(400, "Title is required").send(res);
+            }
+            data.title = trimmedTitle;
+        }
+        if (description !== undefined) {
+            const trimmedDescription = description.trim();
+            if (!trimmedDescription) {
+                return new ApiError(400, "Description is required").send(res);
+            }
+            if (trimmedDescription.length > TODO_DESCRIPTION_MAX_LENGTH) {
+                return new ApiError(400, `Description must be at most ${TODO_DESCRIPTION_MAX_LENGTH} characters`).send(res);
+            }
+            data.description = trimmedDescription;
+        }
+        if (completed !== undefined) {
+            data.completed = completed;
+        }
+        if (dueDate !== undefined) {
+            data.dueDate = dueDate === null ? null : new Date(dueDate);
+        }
+        if (labels !== undefined) {
+            const labelIds = Array.isArray(labels)
+                ? [...new Set(labels.filter((id) => typeof id === "string" && id))]
+                : [];
+            if (labelIds.length > 0) {
+                const ownedLabels = await prisma.label.findMany({
+                    where: { userId, id: { in: labelIds } },
+                    select: { id: true },
+                });
+                if (ownedLabels.length !== labelIds.length) {
+                    return new ApiError(400, "One or more labels are invalid").send(res);
+                }
+            }
+            data.hasLabels = labelIds.length > 0;
+            data.labels = {
+                deleteMany: {},
+                ...(labelIds.length > 0 && {
+                    create: labelIds.map((labelId) => ({
+                        label: { connect: { id: labelId } },
+                    })),
+                }),
+            };
+        }
+        if (Object.keys(data).length === 0) {
+            return new ApiError(400, "No valid fields to update").send(res);
+        }
         const todo = await prisma.todo.update({
             where: { id: todoId, userId },
-            data: req.body,
+            data,
+            include: LABELS_INCLUDE,
         });
-        return new ApiResponse(200, { todo }, "Todo updated successfully").send(res);
+        return new ApiResponse(200, formatTodoWithLabels(todo), "Todo updated successfully").send(res);
     }
     catch (error) {
         return new ApiError(500, getErrorMessage(error)).send(res);
     }
 };
-// Subtasks
-export const getSubtasksForTodo = async (req, res) => {
+export const deleteAllTodos = async (req, res) => {
     try {
-        const todoId = req.params.todoId;
-        if (!todoId) {
-            return new ApiError(400, "Todo id is required").send(res);
-        }
-        const subtasks = await prisma.subtask.findMany({
-            where: { todoId },
-            orderBy: { position: "asc" },
-        });
-        let completed = 0;
-        for (const subtask of subtasks) {
-            if (subtask.completed)
-                completed += 1;
-        }
-        return new ApiResponse(200, {
-            subtasks,
-            counts: {
-                all: subtasks.length,
-                completed,
-                pending: subtasks.length - completed,
-            },
-        }).send(res);
-    }
-    catch (error) {
-        return new ApiError(500, getErrorMessage(error)).send(res);
-    }
-};
-export const updateSubtask = async (req, res) => {
-    try {
-        const subtaskId = req.params.subtaskId;
-        if (!subtaskId) {
-            return new ApiError(400, "Subtask id is required").send(res);
-        }
-        const subtask = await prisma.subtask.update({
-            where: { id: subtaskId },
-            data: req.body,
-        });
-        return new ApiResponse(200, { subtask }, "Subtask updated successfully").send(res);
-    }
-    catch (error) {
-        return new ApiError(500, getErrorMessage(error)).send(res);
-    }
-};
-export const createSubtask = async (req, res) => {
-    try {
-        const todoId = req.params.todoId;
         const userId = req.user.userId;
-        const title = typeof req.body.title === "string" ? req.body.title.trim() : "";
-        if (!todoId) {
-            return new ApiError(400, "Todo id is required").send(res);
-        }
-        if (!title) {
-            return new ApiError(400, "Title is required").send(res);
-        }
-        const todo = await prisma.todo.findFirst({
-            where: { id: todoId, userId },
+        await prisma.todo.deleteMany({
+            where: { userId },
         });
-        if (!todo) {
-            return new ApiError(404, "Todo not found").send(res);
-        }
-        const lastSubtask = await prisma.subtask.findFirst({
-            where: { todoId },
-            orderBy: { position: "desc" },
-            select: { position: true },
-        });
-        const POSITION_STEP = 1000;
-        const position = lastSubtask
-            ? lastSubtask.position + POSITION_STEP
-            : POSITION_STEP;
-        const subtask = await prisma.$transaction(async (tx) => {
-            const created = await tx.subtask.create({
-                data: { todoId, title, position },
-            });
-            await tx.todo.update({
-                where: { id: todoId },
-                data: { subtaskCount: { increment: 1 } },
-            });
-            return created;
-        });
-        return new ApiResponse(201, { subtask }, "Subtask created successfully").send(res);
-    }
-    catch (error) {
-        return new ApiError(500, getErrorMessage(error)).send(res);
-    }
-};
-export const deleteSubtask = async (req, res) => {
-    try {
-        const subtaskId = req.params.subtaskId;
-        if (!subtaskId) {
-            return new ApiError(400, "Subtask id is required").send(res);
-        }
-        await prisma.$transaction(async (tx) => {
-            const subtask = await tx.subtask.delete({
-                where: { id: subtaskId },
-            });
-            await tx.todo.update({
-                where: { id: subtask.todoId },
-                data: { subtaskCount: { decrement: 1 } },
-            });
-        });
-        return new ApiResponse(200, null, "Subtask deleted successfully").send(res);
+        return new ApiResponse(200, null, "All todos deleted successfully").send(res);
     }
     catch (error) {
         return new ApiError(500, getErrorMessage(error)).send(res);

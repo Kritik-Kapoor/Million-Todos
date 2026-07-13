@@ -45,7 +45,7 @@ const useResetPasswordPage = () => {
   });
 
   const resetPasswordMutation = useMutation({
-    mutationFn: (data: ResetPasswordInputs & { resetPasswordToken: string }) =>
+    mutationFn: (data: { resetPasswordToken: string; newPassword: string }) =>
       resetPassword(data),
     onSuccess: () => {
       toast.success("Password reset successfully");
@@ -57,7 +57,10 @@ const useResetPasswordPage = () => {
 
   const onSubmit: SubmitHandler<ResetPasswordInputs> = (data) => {
     if (!resetPasswordToken) return;
-    resetPasswordMutation.mutate({ ...data, resetPasswordToken });
+    resetPasswordMutation.mutate({
+      resetPasswordToken,
+      newPassword: data.newPassword,
+    });
   };
 
   return {
