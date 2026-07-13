@@ -23,7 +23,7 @@ const SubtaskRow = ({
   isDragging?: boolean;
   onToggle: (subtask: Subtask) => void;
   onTitleUpdate: (subtask: Subtask, title: string) => void;
-  onDeleteSubtask: (subtask: Subtask) => void;
+  onDeleteSubtask: (id: string) => void;
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(subtask.title);
@@ -140,7 +140,7 @@ const SubtaskRow = ({
           size="icon"
           aria-label="Delete todo"
           className="size-9 shrink-0 rounded-full text-muted-foreground hover:text-destructive"
-          onClick={() => onDeleteSubtask(subtask)}
+          onClick={() => onDeleteSubtask(subtask.id)}
         >
           <Trash2 className="size-4" />
         </Button>

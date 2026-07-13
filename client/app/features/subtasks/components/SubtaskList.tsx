@@ -46,7 +46,7 @@ const SubtaskList = ({ todoId, onSubtaskCountChange }: SubtaskListProps) => {
     setCreating(true);
     setCreateError(null);
     try {
-      await handleCreate(newTitle);
+      handleCreate(newTitle);
       setNewTitle("");
     } catch (err) {
       setCreateError(

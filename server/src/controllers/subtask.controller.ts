@@ -84,11 +84,9 @@ export const createSubtask = async (req: Request, res: Response) => {
       return created;
     });
 
-    return new ApiResponse(
-      201,
-      { subtask },
-      "Subtask created successfully",
-    ).send(res);
+    return new ApiResponse(201, subtask, "Subtask created successfully").send(
+      res,
+    );
   } catch (error) {
     return new ApiError(500, getErrorMessage(error)).send(res);
   }
@@ -107,11 +105,9 @@ export const updateSubtask = async (req: Request, res: Response) => {
       data: req.body,
     });
 
-    return new ApiResponse(
-      200,
-      { subtask },
-      "Subtask updated successfully",
-    ).send(res);
+    return new ApiResponse(200, subtask, "Subtask updated successfully").send(
+      res,
+    );
   } catch (error) {
     console.error(error);
     return new ApiError(500, getErrorMessage(error)).send(res);
