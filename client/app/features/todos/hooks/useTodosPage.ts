@@ -62,15 +62,17 @@ export function useTodosPage() {
     incrementSubtaskCount,
   } = useTodoStore();
 
-  const { push: pushTodos, flush: flushTodos, clear: clearTodos } =
-    useThrottledFlush<Todo>(addTodoBatch, 200);
+  const {
+    push: pushTodos,
+    flush: flushTodos,
+    clear: clearTodos,
+  } = useThrottledFlush<Todo>(addTodoBatch, 200);
 
   const totalCount = useTodoStore((state) => state.allIds.length);
   const completedCount = useTodoStore((state) => state.completedCount);
   const activeCount = totalCount - completedCount;
   const todoIds = useTodoStore((state) => state.allIds);
 
-  // ── Filter state ──
   const [filters, setFiltersState] = useState<TodoFilters>({});
   const [filteredTodoIds, setFilteredTodoIds] = useState<string[] | null>(null);
   const [isLoadingFilters, setIsLoadingFilters] = useState(false);
@@ -336,7 +338,6 @@ export function useTodosPage() {
     ],
   );
 
-  // ── Filter actions ──
   const applyFilters = useCallback(
     async (newFilters: TodoFilters) => {
       setFiltersState(newFilters);
@@ -353,7 +354,7 @@ export function useTodosPage() {
       filterAbortRef.current = controller;
 
       setIsLoadingFilters(true);
-      setFilteredTodoIds([]); // enter filtering mode immediately (shows empty state while loading)
+      setFilteredTodoIds([]);
 
       try {
         const params = buildFilterParams(newFilters);

@@ -1,5 +1,5 @@
 import { prisma } from "../config/db.js";
-const TODO_ID = "52bb6f7a-ed88-4774-b3ae-1a42caedad27";
+const TODO_ID = "16bc784e-6231-4979-8731-75fa13386a75";
 const TOTAL_SUBTASKS = 1_000;
 const POSITION_GAP = 1_000;
 const BATCH_SIZE = 500;
@@ -10,7 +10,6 @@ const seedSubtasks = async () => {
             const batch = Array.from({ length: Math.min(BATCH_SIZE, TOTAL_SUBTASKS - i) }, (_, index) => ({
                 todoId: TODO_ID,
                 title: `Subtask ${i + index + 1}`,
-                completed: false,
                 position: (i + index + 1) * POSITION_GAP,
             }));
             await prisma.subtask.createMany({

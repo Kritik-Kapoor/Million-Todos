@@ -1,5 +1,5 @@
 import { prisma } from "../config/db.js";
-const USER_ID = "f0edac5a-9082-4033-9cf9-ef8de696102d";
+const USER_ID = "4e8c60d2-6cc3-4f1a-b207-3486467bea4b";
 const TOTAL_TODOS = 1_000_000;
 const BATCH_SIZE = 10_000;
 const seedTodos = async () => {
@@ -10,7 +10,6 @@ const seedTodos = async () => {
                 userId: USER_ID,
                 title: `Todo ${i + index + 1}`,
                 description: `Description for Todo ${i + index + 1}`,
-                completed: false,
             }));
             await prisma.todo.createMany({
                 data: batch,
@@ -18,7 +17,6 @@ const seedTodos = async () => {
             console.log(`Seeded ${i + BATCH_SIZE} of ${TOTAL_TODOS} todos`);
         }
         console.log("Todos seeded successfully");
-        console.timeEnd("Seeding todos");
     }
     catch (error) {
         console.error("Error seeding todos:", error);

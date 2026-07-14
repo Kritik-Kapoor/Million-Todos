@@ -44,28 +44,39 @@ function buildTodoCard(todo: DueReminderTodo): string {
 export function buildDueReminderTemplate(
   username: string,
   todos: DueReminderTodo[],
+  totalTodosDueIn6Hours: number,
 ): { subject: string; html: string } {
   const safeUsername = escapeHtml(username);
   const todosUrl = buildAppUrl("/todos");
   const todoCards = todos.map(buildTodoCard).join("");
-  const todoCount = todos.length;
-  const todoLabel = todoCount === 1 ? "todo" : "todos";
+  const todoLabel = totalTodosDueIn6Hours === 1 ? "todo" : "todos";
+  const remainingCount = totalTodosDueIn6Hours - todos.length;
 
   const subject =
-    todoCount === 1
-      ? "Reminder: 1 todo is due today"
-      : `Reminder: ${todoCount} todos are due today`;
+    totalTodosDueIn6Hours === 1
+      ? "Reminder: 1 todo due in the next 6 hours"
+      : `Reminder: ${totalTodosDueIn6Hours} todos due in the next 6 hours`;
+
+  const overflowNote =
+    remainingCount > 0
+      ? `
+    <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 1.6; color: #6b7280; text-align: center;">
+      and <strong style="color: #111827;">${remainingCount} more ${remainingCount === 1 ? "todo" : "todos"}</strong> due in the next 6 hours
+    </p>
+  `
+      : "";
 
   const body = `
     <p style="margin: 0 0 12px 0; font-size: 16px; line-height: 1.6; color: #111827;">
       Hi ${safeUsername},
     </p>
     <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.6; color: #4b5563;">
-      You have <strong style="color: #111827;">${todoCount} ${todoLabel}</strong> due today. Here is what needs your attention:
+      You have <strong style="color: #111827;">${totalTodosDueIn6Hours} ${todoLabel}</strong> due in the next 6 hours. Here ${totalTodosDueIn6Hours === 1 ? "is what needs" : "are the ones that need"} your attention:
     </p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
       ${todoCards}
     </table>
+    ${overflowNote}
     ${buildPrimaryButton(todosUrl, `Open ${APP_NAME}`)}
   `;
 

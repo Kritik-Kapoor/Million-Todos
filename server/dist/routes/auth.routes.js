@@ -11,5 +11,5 @@ router.get("/me", authenticateUser, getUser);
 router.post("/me", authenticateUser, updateUser);
 router.post("/me/preferences", authenticateUser, updateUserPreferences);
 router.post("/send-verification-mail", authenticateUser, sendVerificationMail);
-router.post("/verify-email", verifyAccount);
+router.get("/verify-email", verifyAccount);
 export default router;

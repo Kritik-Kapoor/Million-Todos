@@ -31,12 +31,16 @@ export class EmailService {
     }
   }
 
-  async sendDueReminder(
+  async sendDueReminders(
     options: SendDueReminderOptions,
   ): Promise<EmailSendResult> {
     try {
-      const { to, username, todos } = options;
-      const { subject, html } = buildDueReminderTemplate(username, todos);
+      const { to, username, todos, totalTodosDueIn6Hours } = options;
+      const { subject, html } = buildDueReminderTemplate(
+        username,
+        todos,
+        totalTodosDueIn6Hours,
+      );
       return await this.sendEmail({ to: [to], subject, html });
     } catch (error) {
       console.error(error);

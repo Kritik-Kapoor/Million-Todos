@@ -10,14 +10,12 @@ import { NotificationPreferences } from "../types";
 
 export function useNotificationPanel({
   dueDateReminder,
-  dailyDigest,
 }: NotificationPreferences) {
   const router = useRouter();
 
   const [notificationPreferences, setNotificationPreferences] =
     useState<NotificationPreferences>({
       dueDateReminder,
-      dailyDigest,
     });
 
   const updateMutation = useMutation({
@@ -44,15 +42,10 @@ export function useNotificationPanel({
       if (updateMutation.isPending) return;
 
       updateMutation.mutate({
-        dueDateReminder:
-          field === "dueDateReminder"
-            ? value
-            : notificationPreferences.dueDateReminder,
-        dailyDigest:
-          field === "dailyDigest" ? value : notificationPreferences.dailyDigest,
+        [field]: value,
       });
     },
-    [notificationPreferences, updateMutation],
+    [updateMutation],
   );
 
   return {

@@ -10,6 +10,7 @@ const USER_RETURN_OPTIONS = {
     email: true,
     dueDateReminder: true,
     dailyDigest: true,
+    isEmailVerified: true,
 };
 export const Register = async (req, res) => {
     try {
@@ -94,8 +95,7 @@ export const updateUser = async (req, res) => {
             if (password.length < 8) {
                 return new ApiError(400, "Password must be at least 8 characters long").send(res);
             }
-            const salt = await bcrypt.genSalt(10);
-            updateData.password = await bcrypt.hash(password, salt);
+            updateData.password = await bcrypt.hash(password, 10);
         }
         const user = await prisma.user.update({
             where: { id: userId },
@@ -244,6 +244,7 @@ export const sendVerificationMail = async (req, res) => {
         });
         if (!storeToken)
             return new ApiError(500, "Failed to generate verification mail").send(res);
+        //TODO: Use user.email after domain been setup in Resend
         const { success } = await emailService.sendVerificationEmail({
             to: user.email,
             username: user.username,
@@ -259,34 +260,29 @@ export const sendVerificationMail = async (req, res) => {
 };
 export const verifyAccount = async (req, res) => {
     try {
-        const { token, email } = req.body;
-        if (!token || !email) {
+        const { token, email } = req.query;
+        if (!token || !email)
             return new ApiError(400, "Token and email are required").send(res);
-        }
         const user = await prisma.user.findUnique({
             where: { email },
             select: { id: true, isEmailVerified: true },
         });
-        if (!user) {
+        if (!user)
             return new ApiError(400, "Invalid or expired link").send(res);
-        }
-        if (user.isEmailVerified) {
+        if (user.isEmailVerified)
             return new ApiResponse(200, null, "Account already verified").send(res);
-        }
         const tokenHash = generateHashedToken(token);
         const isTokenValid = await prisma.userTokens.findFirst({
             where: {
                 userId: user.id,
-                tokenHash,
                 type: TokenType.EMAIL_VERIFICATION,
+                tokenHash,
                 usedAt: null,
                 expiresAt: { gt: new Date() },
             },
-            orderBy: { createdAt: "desc" },
         });
-        if (!isTokenValid) {
+        if (!isTokenValid)
             return new ApiError(400, "Invalid or expired link").send(res);
-        }
         await prisma.$transaction(async (tx) => {
             await tx.user.update({
                 where: { id: user.id },

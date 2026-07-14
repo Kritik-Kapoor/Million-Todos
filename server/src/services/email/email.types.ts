@@ -21,6 +21,7 @@ export type BasicEmailOptions = {
 
 export type SendDueReminderOptions = BasicEmailOptions & {
   todos: DueReminderTodo[];
+  totalTodosDueIn6Hours: number;
 };
 
 export type SendVerificationEmailOptions = BasicEmailOptions & {

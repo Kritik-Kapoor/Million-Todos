@@ -7,6 +7,7 @@ import authRoutes from "./routes/auth.routes.js";
 import labelRoutes from "./routes/label.routes.js";
 import todoRoutes from "./routes/todo.routes.js";
 import subtaskRoutes from "./routes/subtask.routes.js";
+import { startReminderJob } from "./jobs/reminder.job.js";
 dotenv.config();
 connectDB();
 const corsOptions = {
@@ -27,4 +28,5 @@ app.use("/subtasks", subtaskRoutes);
 const port = process.env.PORT ?? "3001";
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
+    startReminderJob();
 });

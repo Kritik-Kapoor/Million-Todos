@@ -6,15 +6,13 @@ import PanelHeader from "./PanelHeader";
 
 const NotificationsPanel = ({
   dueDateReminder,
-  dailyDigest,
 }: {
   dueDateReminder: boolean;
-  dailyDigest: boolean;
 }) => {
   const {
     state: { notificationPreferences, isUpdating },
     actions: { handleToggle },
-  } = useNotificationPanel({ dueDateReminder, dailyDigest });
+  } = useNotificationPanel({ dueDateReminder });
 
   return (
     <div className="space-y-6">
@@ -29,13 +27,6 @@ const NotificationsPanel = ({
           description="Get reminded when a todo is due."
           checked={notificationPreferences.dueDateReminder}
           onChange={(checked) => handleToggle("dueDateReminder", checked)}
-          disabled={isUpdating}
-        />
-        <NotificationToggleRow
-          title="Daily digest"
-          description="A morning summary of your day's focus."
-          checked={notificationPreferences.dailyDigest}
-          onChange={(checked) => handleToggle("dailyDigest", checked)}
           disabled={isUpdating}
         />
       </div>
