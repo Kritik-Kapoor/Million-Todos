@@ -16,7 +16,10 @@ export type UpdateAccountPayload = {
   password?: string;
 };
 
-export type NotificationPreferences = Pick<CurrentUser, "dueDateReminder">;
+export type NotificationPreferences = Pick<
+  CurrentUser,
+  "dueDateReminder" | "emailReminder"
+>;
 
 export type ThemePreference = "light" | "dark" | "system";
 

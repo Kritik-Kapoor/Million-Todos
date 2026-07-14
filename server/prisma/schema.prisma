@@ -13,6 +13,7 @@ model User {
   password String
   isEmailVerified Boolean @default(false)
   dueDateReminder Boolean @default(true)
+  emailReminder Boolean @default(true)
   createdAt DateTime @default(now())
   lastReminderAt DateTime?
   todos Todo[]

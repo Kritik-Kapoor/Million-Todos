@@ -3,7 +3,7 @@ declare global {
     username: string;
     email: string;
     dueDateReminder: boolean;
-    dailyDigest: boolean;
+    emailReminder: boolean;
     isEmailVerified: boolean;
   };
 

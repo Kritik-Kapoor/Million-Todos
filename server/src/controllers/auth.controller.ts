@@ -31,7 +31,7 @@ const USER_RETURN_OPTIONS = {
   username: true,
   email: true,
   dueDateReminder: true,
-  dailyDigest: true,
+  emailReminder: true,
   isEmailVerified: true,
 } as const;
 
@@ -173,15 +173,15 @@ export const updateUser = async (req: Request, res: Response) => {
 export const updateUserPreferences = async (req: Request, res: Response) => {
   try {
     const userId = req.user!.userId;
-    const { dueDateReminder, dailyDigest } = req.body as {
+    const { dueDateReminder, emailReminder } = req.body as {
       dueDateReminder: boolean;
-      dailyDigest: boolean;
+      emailReminder: boolean;
     };
 
-    if (dueDateReminder === undefined || dailyDigest === undefined) {
+    if (dueDateReminder === undefined || emailReminder === undefined) {
       return new ApiError(
         400,
-        "Invalid input, both dueDateReminder and dailyDigest must be provided",
+        "Invalid input, both dueDateReminder and emailReminder must be provided",
       ).send(res);
     }
 

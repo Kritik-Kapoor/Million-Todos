@@ -9,7 +9,7 @@ const USER_RETURN_OPTIONS = {
     username: true,
     email: true,
     dueDateReminder: true,
-    dailyDigest: true,
+    emailReminder: true,
     isEmailVerified: true,
 };
 export const Register = async (req, res) => {
@@ -111,13 +111,20 @@ export const updateUser = async (req, res) => {
 export const updateUserPreferences = async (req, res) => {
     try {
         const userId = req.user.userId;
-        const { dueDateReminder, dailyDigest } = req.body;
-        if (dueDateReminder === undefined || dailyDigest === undefined) {
-            return new ApiError(400, "Invalid input, both dueDateReminder and dailyDigest must be provided").send(res);
+        const { dueDateReminder, emailReminder } = req.body;
+        const data = {};
+        if (typeof dueDateReminder === "boolean") {
+            data.dueDateReminder = dueDateReminder;
+        }
+        if (typeof emailReminder === "boolean") {
+            data.emailReminder = emailReminder;
+        }
+        if (Object.keys(data).length === 0) {
+            return new ApiError(400, "No valid preference fields provided").send(res);
         }
         const user = await prisma.user.update({
             where: { id: userId },
-            data: req.body,
+            data,
             select: USER_RETURN_OPTIONS,
         });
         return new ApiResponse(200, user, "User preferences updated successfully").send(res);

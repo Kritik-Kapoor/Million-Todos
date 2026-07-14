@@ -6,17 +6,13 @@ import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import getErrorMessage from "@/lib/utils/getErrorMessage";
 import { updateUserPreferences } from "../api";
-import { NotificationPreferences } from "../types";
+import type { NotificationPreferences } from "../types";
 
-export function useNotificationPanel({
-  dueDateReminder,
-}: NotificationPreferences) {
+export function useNotificationPanel(initialPreferences: NotificationPreferences) {
   const router = useRouter();
 
   const [notificationPreferences, setNotificationPreferences] =
-    useState<NotificationPreferences>({
-      dueDateReminder,
-    });
+    useState<NotificationPreferences>(initialPreferences);
 
   const updateMutation = useMutation({
     mutationFn: updateUserPreferences,
@@ -42,10 +38,11 @@ export function useNotificationPanel({
       if (updateMutation.isPending) return;
 
       updateMutation.mutate({
+        ...notificationPreferences,
         [field]: value,
       });
     },
-    [updateMutation],
+    [notificationPreferences, updateMutation],
   );
 
   return {

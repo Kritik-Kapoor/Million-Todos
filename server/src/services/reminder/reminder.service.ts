@@ -54,6 +54,7 @@ class ReminderService {
     const users = await prisma.user.findMany({
       where: {
         dueDateReminder: true,
+        emailReminder: true,
         isEmailVerified: true,
         OR: [
           { lastReminderAt: null },

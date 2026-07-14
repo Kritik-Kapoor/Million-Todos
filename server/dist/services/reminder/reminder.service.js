@@ -12,11 +12,10 @@ class ReminderService {
                 const todos = await this.getDueTodos(user.id, now, sixHoursFromNow);
                 if (todos.length === 0)
                     continue;
-                const previewTodos = todos.slice(0, 3);
                 const { success } = await emailService.sendDueReminders({
                     to: user.email,
                     username: user.username,
-                    todos: previewTodos.map((todo) => ({
+                    todos: todos.slice(0, 3).map((todo) => ({
                         id: todo.id,
                         title: todo.title,
                         dueDate: todo.dueDate,
@@ -49,6 +48,7 @@ class ReminderService {
         const users = await prisma.user.findMany({
             where: {
                 dueDateReminder: true,
+                emailReminder: true,
                 isEmailVerified: true,
                 OR: [
                     { lastReminderAt: null },
