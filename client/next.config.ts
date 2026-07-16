@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
       hmrRefreshes: true,
     },
   },
+  output: "standalone",
   /* config options here */
 };
 

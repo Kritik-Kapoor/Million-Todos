@@ -12,10 +12,17 @@ import { startReminderJob } from "./jobs/reminder.job.js";
 dotenv.config();
 connectDB();
 
+const productionOrigins = [
+  ...new Set([
+    process.env.WEBAPP_PROD_URL,
+    ...(process.env.WEBAPP_DEV_URL ? [process.env.WEBAPP_DEV_URL] : []),
+  ]),
+];
+
 const corsOptions: cors.CorsOptions = {
   origin:
     process.env.NODE_ENV === "production"
-      ? process.env.CLIENT_ORIGIN
+      ? (productionOrigins as string[])
       : "http://localhost:3000",
   credentials: true,
 };

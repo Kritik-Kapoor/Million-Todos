@@ -1,0 +1,49 @@
+# Run with the base compose file:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+services:
+  server:
+    build:
+      context: ./server
+      target: deps
+
+    command: npm run dev
+
+    ports:
+      - "3001:3001"
+
+    env_file:
+      - ./server/.env
+
+    environment:
+      DATABASE_URL: postgresql://postgres:million-todos@postgres:5432/million_todos?schema=public
+      NODE_ENV: development
+
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  client:
+    build:
+      context: ./client
+      target: deps
+
+    command: npm run dev -- -H 0.0.0.0
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:3001
+      COOKIE_NAME: million-todos-token
+      NODE_ENV: development
+
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+
+    depends_on:
+      - server
