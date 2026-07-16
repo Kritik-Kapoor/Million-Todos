@@ -8,12 +8,22 @@ import {
   updateTodo,
 } from "../controllers/todo.controller.js";
 import { authenticateUser } from "../middlewares/authenticateUser.middleware.js";
+import rateLimiterMiddleware from "../middlewares/rateLimiter.middleware.js";
 
 const router = Router();
 
-// TODO Routes
-router.get("/", authenticateUser, getTodos);
-router.post("/", authenticateUser, createTodo);
+router.get(
+  "/",
+  authenticateUser,
+  rateLimiterMiddleware({ limit: 8, windowMs: 60 * 1000 }),
+  getTodos,
+);
+router.post(
+  "/",
+  authenticateUser,
+  rateLimiterMiddleware({ limit: 20, windowMs: 60 * 1000 }),
+  createTodo,
+);
 router.get("/filter", authenticateUser, getFilteredTodos);
 router.patch("/:todoId", authenticateUser, updateTodo);
 router.delete("/:todoId", authenticateUser, deleteTodo);

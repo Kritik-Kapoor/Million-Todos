@@ -3,7 +3,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   ArrowRight,
+  BarChart3,
   Database,
+  Globe,
   Layers,
   ListChecks,
   Monitor,
@@ -50,7 +52,7 @@ async function getCurrentUser(): Promise<CurrentUser | null> {
 
 const highlights = [
   { value: "1M+", label: "Todos streamed" },
-  { value: "10k", label: "Subtasks per todo" },
+  { value: "100", label: "Subtasks per todo" },
   { value: "NDJSON", label: "Chunked delivery" },
   { value: "60fps", label: "Virtualized scroll" },
 ];
@@ -69,6 +71,16 @@ const frontendFeatures = [
   "Progressive stream reader with batched state updates to avoid 1M re-renders",
   "Virtualized subtask sheet with dnd-kit reorder and optimistic API updates",
   "TanStack Query for subtask server state — cache, mutations, and invalidation",
+];
+
+const scalabilityBenchmarks = [
+  { dataset: "750,000 todos", status: "🌐 Live demo" },
+  { dataset: "1,000,000 todos", status: "✅ Tested locally" },
+  { dataset: "2,000,000 todos", status: "✅ Tested locally" },
+  { dataset: "NDJSON streaming", status: "✅" },
+  { dataset: "PostgreSQL Full-Text Search", status: "✅" },
+  { dataset: "Client-side Virtualization", status: "✅" },
+  { dataset: "O(1) Todo Lookup", status: "✅" },
 ];
 
 const strengths = [
@@ -120,7 +132,7 @@ export default async function Home() {
             <p className="max-w-2xl text-base text-muted-foreground sm:text-lg">
               A todo app built to stress-test what happens when your dataset is
               not small. It streams a million todos, virtualizes the list in the
-              browser, and manages thousands of subtasks per item — without
+              browser, and manages up to 100 subtasks per item — without
               freezing the UI or choking the database.
             </p>
             <div className="flex flex-wrap gap-3 pt-2">
@@ -226,6 +238,77 @@ export default async function Home() {
               </Card>
             ))}
           </div>
+        </section>
+
+        {/* Live Demo */}
+        <section className="flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <Globe className="size-4 text-primary" />
+            <h2 className="text-lg font-semibold">Live Demo</h2>
+          </div>
+          <Card className="rounded-2xl shadow-sm">
+            <CardContent className="flex flex-col gap-4 text-sm text-muted-foreground">
+              <p>
+                The hosted demo runs with approximately 750,000 todos. This
+                limit is intentional to remain within the storage constraints of
+                free-tier hosting while still demonstrating streaming,
+                virtualization, PostgreSQL indexing, and efficient rendering at
+                large scale.
+              </p>
+              <p>
+                The project is fully Dockerized. To evaluate the complete
+                scalability of the application (up to 2 million todos), clone
+                the repository and run:
+              </p>
+              <pre className="overflow-x-auto rounded-xl border border-border/70 bg-muted/50 px-4 py-3 font-mono text-xs text-foreground sm:text-sm">
+                {`docker compose up
+npm run seed:2m`}
+              </pre>
+              <p>
+                This reproduces the large-scale environment used during
+                development and benchmarking.
+              </p>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Scalability Benchmarks */}
+        <section className="flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="size-4 text-primary" />
+            <h2 className="text-lg font-semibold">Scalability Benchmarks</h2>
+          </div>
+          <Card className="overflow-hidden rounded-2xl shadow-sm">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[20rem] text-sm">
+                  <thead>
+                    <tr className="border-b border-border/70 bg-muted/40">
+                      <th className="px-4 py-3 text-left font-medium">
+                        Dataset
+                      </th>
+                      <th className="px-4 py-3 text-left font-medium">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scalabilityBenchmarks.map((row) => (
+                      <tr
+                        key={row.dataset}
+                        className="border-b border-border/50 last:border-b-0"
+                      >
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {row.dataset}
+                        </td>
+                        <td className="px-4 py-3">{row.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
         </section>
 
         {/* CTA */}

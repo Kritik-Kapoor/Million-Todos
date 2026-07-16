@@ -10,7 +10,7 @@ import {
   fetchSubtasks,
   updateSubtask,
 } from "@/features/subtasks/api";
-import { ADD_TASK, DELETE_TASK } from "@/constants";
+import { ADD_TASK, DELETE_TASK, MAX_SUBTASKS_PER_TODO } from "@/constants";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import getErrorMessage from "@/lib/utils/getErrorMessage";
@@ -141,8 +141,8 @@ export function useSubtaskList(
       onSubtaskCountChange(ADD_TASK);
       toast.success("Subtask created");
     },
-    onError: () => {
-      toast.error("Failed to create subtask");
+    onError: (error) => {
+      toast.error(getErrorMessage(error));
     },
   });
 
@@ -221,9 +221,16 @@ export function useSubtaskList(
       const subtaskTitle = title.trim();
       if (!subtaskTitle) return;
 
+      if (subtasks.length >= MAX_SUBTASKS_PER_TODO) {
+        toast.error(
+          `Maximum of ${MAX_SUBTASKS_PER_TODO} subtasks per todo reached`,
+        );
+        return;
+      }
+
       createSubtasksMutation.mutate(subtaskTitle);
     },
-    [createSubtasksMutation],
+    [createSubtasksMutation, subtasks.length],
   );
 
   return {
@@ -233,6 +240,7 @@ export function useSubtaskList(
       loading: isLoadingSubtasks,
       error: isErrorSubtasks,
       completionStats,
+      isAtSubtaskLimit: subtasks.length >= MAX_SUBTASKS_PER_TODO,
     },
     actions: {
       handleToggle,

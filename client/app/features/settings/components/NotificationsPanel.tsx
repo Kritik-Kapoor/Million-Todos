@@ -8,7 +8,8 @@ import type { NotificationPreferences } from "../types";
 const NotificationsPanel = ({
   dueDateReminder,
   emailReminder,
-}: NotificationPreferences) => {
+  isEmailVerified,
+}: NotificationPreferences & { isEmailVerified: boolean }) => {
   const {
     state: { notificationPreferences, isUpdating },
     actions: { handleToggle },
@@ -44,6 +45,11 @@ const NotificationsPanel = ({
             checked={notificationPreferences.emailReminder}
             onChange={(checked) => handleToggle("emailReminder", checked)}
             disabled={isUpdating || !notificationPreferences.dueDateReminder}
+            note={
+              !isEmailVerified
+                ? "Only verified email addresses can receive reminders."
+                : undefined
+            }
           />
 
           <NotificationToggleRow

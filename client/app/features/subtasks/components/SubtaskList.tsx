@@ -11,6 +11,7 @@ import { useSubtaskList } from "../hooks/useSubtaskList";
 import SubtaskRow from "./SubtaskRow";
 import SubtaskListSkeleton from "./Loading";
 import { Progress } from "@/components/ui/progress";
+import { MAX_SUBTASKS_PER_TODO } from "@/constants";
 
 const SUBTASK_ROW_HEIGHT = 56;
 const SUBTASK_LIST_HEIGHT = 600;
@@ -28,7 +29,14 @@ const SubtaskList = ({ todoId, onSubtaskCountChange }: SubtaskListProps) => {
   const [createError, setCreateError] = useState<string | null>(null);
 
   const {
-    state: { subtasks, activeId, loading, error, completionStats },
+    state: {
+      subtasks,
+      activeId,
+      loading,
+      error,
+      completionStats,
+      isAtSubtaskLimit,
+    },
     actions: {
       handleToggle,
       handleDragStart,
@@ -41,7 +49,7 @@ const SubtaskList = ({ todoId, onSubtaskCountChange }: SubtaskListProps) => {
 
   const handleSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!newTitle.trim() || creating) return;
+    if (!newTitle.trim() || creating || isAtSubtaskLimit) return;
 
     setCreating(true);
     setCreateError(null);
@@ -90,20 +98,29 @@ const SubtaskList = ({ todoId, onSubtaskCountChange }: SubtaskListProps) => {
           ref={subtaskInputRef}
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
-          placeholder="Add a subtask…"
+          placeholder={
+            isAtSubtaskLimit
+              ? `Maximum of ${MAX_SUBTASKS_PER_TODO} subtasks reached`
+              : "Add a subtask…"
+          }
           aria-label="New subtask title"
-          disabled={creating}
+          disabled={creating || isAtSubtaskLimit}
           className="h-11 rounded-xl"
         />
         <Button
           type="submit"
-          disabled={creating || !newTitle.trim()}
+          disabled={creating || !newTitle.trim() || isAtSubtaskLimit}
           className="h-11 px-3 rounded-xl"
         >
           <Plus className="size-4" />
           Add
         </Button>
       </form>
+      {isAtSubtaskLimit && (
+        <p className="text-sm text-muted-foreground">
+          Each todo supports up to {MAX_SUBTASKS_PER_TODO} subtasks.
+        </p>
+      )}
       {createError && <p className="text-sm text-destructive">{createError}</p>}
 
       {subtasks.length === 0 ? (

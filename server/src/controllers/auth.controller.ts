@@ -246,9 +246,8 @@ export const forgotPassword = async (req: Request, res: Response) => {
         res,
       );
 
-    //TODO: Use user.email after domain been setup in Resend
     const { success } = await emailService.sendPasswordResetEmail({
-      to: "kritik0401@gmail.com", //user.email,
+      to: user.email,
       username: user.username,
       passwordResetToken: rawToken,
     });
@@ -368,7 +367,6 @@ export const sendVerificationMail = async (req: Request, res: Response) => {
         res,
       );
 
-    //TODO: Use user.email after domain been setup in Resend
     const { success } = await emailService.sendVerificationEmail({
       to: user.email,
       username: user.username,

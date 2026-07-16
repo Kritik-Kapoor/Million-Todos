@@ -1,6 +1,12 @@
 "use client";
 
-import { AlertTriangle, EyeIcon, EyeOffIcon, Loader2 } from "lucide-react";
+import {
+  AlertTriangle,
+  EyeIcon,
+  EyeOffIcon,
+  InfoIcon,
+  Loader2,
+} from "lucide-react";
 import { Controller } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,7 +76,14 @@ const AccountPanel = ({ user }: AccountPanelProps) => {
             <div className="flex items-center justify-between">
               <div>
                 <FieldLabel htmlFor="email">Email</FieldLabel>
-                <FieldDescription>Email cannot be changed.</FieldDescription>
+                {!user.isEmailVerified && (
+                  <FieldDescription className="flex items-center gap-1 py-1">
+                    <InfoIcon className="h-4 w-4 text-blue-500" />
+                    <p className="text-xs">
+                      Only verified email addresses can receive reminders.
+                    </p>
+                  </FieldDescription>
+                )}
               </div>
               {!user.isEmailVerified && (
                 <Button

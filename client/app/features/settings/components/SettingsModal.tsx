@@ -43,6 +43,7 @@ const SettingsModal = ({ isOpen, onOpenChange, user }: SettingsModalProps) => {
               <NotificationsPanel
                 dueDateReminder={user.dueDateReminder}
                 emailReminder={user.emailReminder}
+                isEmailVerified={user.isEmailVerified}
               />
             )}
             {activeTab === "data" && <DataPanel />}
