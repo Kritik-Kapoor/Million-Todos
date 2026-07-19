@@ -31,7 +31,7 @@ const useLoginPage = () => {
 
   const loginMutation = useMutation({
     mutationFn: (data: LoginInputs) => loginUser(data),
-    onSuccess: () => router.push("/"),
+    onSuccess: () => router.push("/todos"),
     onError: () => toast.error("Invalid credentials"),
   });
 

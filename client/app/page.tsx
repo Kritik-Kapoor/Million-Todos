@@ -34,6 +34,7 @@ type CurrentUser = {
 async function getCurrentUser(): Promise<CurrentUser | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(process.env.COOKIE_NAME!);
+  console.log(token);
 
   if (!token) return null;
 
@@ -112,6 +113,7 @@ const strengths = [
 
 export default async function Home() {
   const user = await getCurrentUser();
+  console.log(user);
 
   if (user) {
     redirect("/todos");

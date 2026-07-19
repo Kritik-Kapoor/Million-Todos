@@ -38,7 +38,7 @@ const useRegisterPage = () => {
 
   const registerMutation = useMutation({
     mutationFn: (data: RegisterInputs) => registerUser(data),
-    onSuccess: () => router.push("/"),
+    onSuccess: () => router.push("/todos"),
     onError: () => toast.error("Failed to register"),
   });
 
