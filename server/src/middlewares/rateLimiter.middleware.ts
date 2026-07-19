@@ -8,7 +8,7 @@ type RateLimiterMiddlewareOptions = {
 function rateLimiterMiddleware({
   limit = 10,
   windowMs = 15 * 60 * 1000,
-}: RateLimiterMiddlewareOptions) {
+}: RateLimiterMiddlewareOptions = {}) {
   return rateLimit({
     windowMs,
     limit,

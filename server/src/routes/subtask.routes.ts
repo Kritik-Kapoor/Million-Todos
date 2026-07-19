@@ -9,16 +9,13 @@ import rateLimiterMiddleware from "../middlewares/rateLimiter.middleware.js";
 
 const router = Router();
 
-router.get(
-  "/:todoId",
-  rateLimiterMiddleware({ limit: 20, windowMs: 60 * 1000 }),
-  getSubtasksForTodo,
-);
-router.post(
-  "/:todoId",
-  rateLimiterMiddleware({ limit: 20, windowMs: 60 * 1000 }),
-  createSubtask,
-);
+const subtaskRateLimiter = rateLimiterMiddleware({
+  limit: 20,
+  windowMs: 60 * 1000,
+});
+
+router.get("/:todoId", subtaskRateLimiter, getSubtasksForTodo);
+router.post("/:todoId", subtaskRateLimiter, createSubtask);
 router.patch("/:subtaskId", updateSubtask);
 router.delete("/:subtaskId", deleteSubtask);
 
