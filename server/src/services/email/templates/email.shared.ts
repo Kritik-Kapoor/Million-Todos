@@ -1,11 +1,5 @@
 export const APP_NAME = "Million Todos";
 
-export function getAppUrl(): string {
-  return process.env.NODE_ENV === "production"
-    ? process.env.WEBAPP_PROD_URL!
-    : (process.env.WEBAPP_DEV_URL ?? "http://localhost:3000");
-}
-
 export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -15,7 +9,7 @@ export function escapeHtml(text: string): string {
 }
 
 export function buildAppUrl(path: string): string {
-  return `${getAppUrl().replace(/\/$/, "")}${path}`;
+  return `${process.env.WEBAPP_URL!.replace(/\/$/, "")}${path}`;
 }
 
 type EmailShellOptions = {
