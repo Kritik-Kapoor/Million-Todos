@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "nodemon --watch src --ext ts --exec tsx src/index.ts",
-    "build": "prisma generate && tsc",
+    "build": "tsc",
     "start": "node dist/index.js",
     "seed:todos": "tsx src/scripts/seed-todos.ts",
     "seed:subtasks": "tsx src/scripts/seed-subtasks.ts"

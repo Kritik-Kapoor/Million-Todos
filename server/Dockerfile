@@ -16,8 +16,6 @@ COPY --from=deps /app/node_modules ./node_modules
 
 COPY . .
 
-RUN npx prisma generate
-
 RUN npm run build
 
 # Production
@@ -33,10 +31,10 @@ RUN npm ci --omit=dev
 
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+COPY --from=builder /app/dist ./dist
 
 RUN npx prisma generate
 
-COPY --from=builder /app/dist ./dist
 
 EXPOSE 3001
 
