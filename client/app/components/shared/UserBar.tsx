@@ -8,8 +8,6 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 async function getCurrentUser(): Promise<CurrentUser> {
   const cookieStore = await cookies();
   const token = cookieStore.get(process.env.COOKIE_NAME!);
-  console.log("cookieStore", cookieStore);
-  console.log("token", token);
 
   if (!token) redirect("/login");
 

@@ -34,7 +34,6 @@ type CurrentUser = {
 async function getCurrentUser(): Promise<CurrentUser | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(process.env.COOKIE_NAME!);
-  console.log(token);
 
   if (!token) return null;
 

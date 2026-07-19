@@ -105,9 +105,12 @@ export const Login = async (req: Request, res: Response) => {
 
 export const Logout = async (_: Request, res: Response) => {
   try {
-    res.cookie("million-todos-token", "", {
+    res.clearCookie("million-todos-token", {
       httpOnly: true,
-      expires: new Date(),
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      domain: ".kritikkapoor.in",
+      path: "/",
     });
     return new ApiResponse(200, null, "User logged out successfully").send(res);
   } catch (error) {
