@@ -59,18 +59,18 @@ const highlights = [
 
 const backendFeatures = [
   "Express + TypeScript API with JWT auth over httpOnly cookies",
-  "PostgreSQL + Prisma with cursor-based pagination on 1M todo rows",
+  "PostgreSQL + Prisma with cursor based pagination on 1M todo rows",
   "NDJSON streaming — todos arrive in batches without loading the full payload upfront",
-  "Subtask model with fractional position ordering for O(1) drag-and-drop inserts",
+  "Subtask model with fractional position ordering for O(1) drag and drop inserts",
   "Denormalized subtaskCount on todos to avoid expensive joins at list scale",
 ];
 
 const frontendFeatures = [
   "Next.js App Router — Server Components for auth shell, Client Components for interactive lists",
-  "Custom VirtualList with proportional scroll mapping for million-row lists",
+  "Custom VirtualList with proportional scroll mapping for million rows lists",
   "Progressive stream reader with batched state updates to avoid 1M re-renders",
   "Virtualized subtask sheet with dnd-kit reorder and optimistic API updates",
-  "TanStack Query for subtask server state — cache, mutations, and invalidation",
+  "TanStack Query for subtask server state, cache, mutations, and invalidation",
 ];
 
 const scalabilityBenchmarks = [
@@ -88,23 +88,23 @@ const strengths = [
     icon: Zap,
     title: "Progressive at scale",
     description:
-      "The UI renders todos as they stream in. You are not blocked waiting for a million-row JSON response.",
+      "The UI renders todos as they stream in. You are not blocked waiting for a million rows JSON response.",
   },
   {
     icon: Layers,
     title: "Right tool per data shape",
     description:
-      "Custom streaming for the todo firehose, React Query for subtask CRUD — no one-size-fits-all data layer.",
+      "Custom streaming for the todo firehose, React Query for subtask CRUD —> no one size fits all data layer.",
   },
   {
     icon: Database,
-    title: "Database-aware design",
+    title: "Database aware design",
     description:
-      "Indexes, denormalized counters, and cursor pagination chosen for real PostgreSQL workloads, not demo-sized tables.",
+      "Indexes, denormalized counters, and cursor pagination chosen for real PostgreSQL workloads, not demo sized tables.",
   },
   {
     icon: Monitor,
-    title: "DOM-bounded rendering",
+    title: "DOM bounded rendering",
     description:
       "Virtualization keeps only visible rows in the DOM, so scrolling stays smooth even with enormous datasets.",
   },
@@ -112,7 +112,6 @@ const strengths = [
 
 export default async function Home() {
   const user = await getCurrentUser();
-  console.log(user);
 
   if (user) {
     redirect("/todos");
@@ -123,18 +122,22 @@ export default async function Home() {
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-10">
         {/* Hero */}
         <section className="overflow-hidden rounded-3xl border border-border/70 bg-linear-to-br from-primary/10 via-background to-muted/50 p-8 shadow-sm sm:p-10">
-          <div className="flex flex-col gap-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-              Full-stack performance study
-            </p>
+          <div className="flex flex-col gap-4">
             <h1 className="max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl">
               Million Todos
             </h1>
-            <p className="max-w-2xl text-base text-muted-foreground sm:text-lg">
-              A todo app built to stress-test what happens when your dataset is
+            <p className="text-base text-muted-foreground sm:text-lg">
+              A todo app built to stress test what happens when your dataset is
               not small. It streams a million todos, virtualizes the list in the
-              browser, and manages up to 100 subtasks per item — without
-              freezing the UI or choking the database.
+              browser, and manages up to 100 subtasks per item without freezing
+              the UI or choking the database.
+            </p>
+            <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
+              The hosted backend runs on Render&apos;s free tier (0.1 CPU).
+              Responses can feel slow, and the first request after idle time may
+              take 30–45 seconds while the server wakes from sleep. If nothing
+              happens right away after login, wait a moment and try again. For
+              the best experience, run the project locally with Docker.
             </p>
             <div className="flex flex-wrap gap-3 pt-2">
               <Button asChild size="lg">
@@ -248,7 +251,7 @@ export default async function Home() {
             <h2 className="text-lg font-semibold">Live Demo</h2>
           </div>
           <Card className="rounded-2xl shadow-sm">
-            <CardContent className="flex flex-col gap-4 text-sm text-muted-foreground">
+            <CardContent className="flex flex-col gap-2 text-sm text-muted-foreground">
               <p>
                 The hosted demo runs with approximately 750,000 todos. This
                 limit is intentional to remain within the storage constraints of
@@ -256,6 +259,22 @@ export default async function Home() {
                 virtualization, PostgreSQL indexing, and efficient rendering at
                 large scale.
               </p>
+              <div className="rounded-xl border border-border/70 bg-muted/50 px-4 py-3 text-foreground">
+                <p className="text-sm font-medium">Production demo account</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  These credentials work on the hosted demo only.
+                </p>
+                <dl className="mt-3 space-y-1 font-mono text-xs sm:text-sm">
+                  <div>
+                    <dt className="inline text-muted-foreground">Email: </dt>
+                    <dd className="inline">kritik.testing@gmail.com</dd>
+                  </div>
+                  <div>
+                    <dt className="inline text-muted-foreground">Password: </dt>
+                    <dd className="inline">test@123</dd>
+                  </div>
+                </dl>
+              </div>
               <p>
                 The project is fully Dockerized. To evaluate the complete
                 scalability of the application (up to 2 million todos), clone

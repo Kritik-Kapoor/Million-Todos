@@ -42,6 +42,7 @@ export const getTodos = async (req: Request, res: Response) => {
   let todos: TodoRow[] = [];
 
   try {
+    console.time("stream");
     while (true) {
       todos = await prisma.todo.findMany({
         where: { userId },
@@ -67,6 +68,8 @@ export const getTodos = async (req: Request, res: Response) => {
       // Fewer rows than requested means we've reached the last batch
       if (todos.length < BATCH_SIZE) break;
     }
+
+    console.timeEnd("stream");
   } catch (error) {
     const message = getErrorMessage(error);
     if (!res.headersSent) {

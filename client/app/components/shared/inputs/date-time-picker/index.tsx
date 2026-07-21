@@ -30,7 +30,7 @@ export function DateTimePicker({
   onChange,
   onCommit,
   placeholder = "Pick a date & time",
-  minDateTime,
+  minDateTime = new Date(),
   maxDateTime,
   disabled = false,
   className,

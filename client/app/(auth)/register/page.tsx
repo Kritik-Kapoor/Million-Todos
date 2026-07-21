@@ -21,7 +21,7 @@ const RegisterPage = () => {
   } = useRegisterPage();
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen px-4">
+    <div className="flex flex-col items-center justify-center h-screen px-4 gap-3">
       <Card className="w-full max-w-sm p-4">
         <div className="mb-7 flex flex-col items-center justify-center">
           <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
@@ -63,7 +63,7 @@ const RegisterPage = () => {
                     id="email"
                     type="email"
                     autoComplete="email"
-                    placeholder="email@example.com"
+                    placeholder="Enter your email"
                     aria-invalid={fieldState.invalid}
                     {...field}
                   />
@@ -128,6 +128,12 @@ const RegisterPage = () => {
           </Link>
         </p>
       </Card>
+      <p className="text-sm text-muted-foreground text-center">
+        New to Million Todos?{" "}
+        <Button variant="link" asChild className="h-auto p-0 text-sm">
+          <Link href="/">View app info</Link>
+        </Button>
+      </p>
     </div>
   );
 };

@@ -19,6 +19,17 @@ git clone https://github.com/Kritik-Kapoor/million-todos.git
 cd million-todos
 ```
 
+## Try the hosted demo (production only)
+
+The live deployment includes a pre seeded testing account so you can explore the app without registering:
+
+| Field    | Value                      |
+| -------- | -------------------------- |
+| Email    | `kritik.testing@gmail.com` |
+| Password | `test@123`                 |
+
+These credentials work on **production only** (the hosted demo). They do not apply to local development. Register your own account locally or seed data with your user id.
+
 ## Environment variables
 
 This project keeps secrets out of git. Copy the example files and fill in your values:

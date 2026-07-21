@@ -1,31 +1,30 @@
 import { prisma } from "../config/db.js";
 
-// Update this to the todo ID you want to seed subtasks for
-const TODO_ID = "89cee62b-8c4d-4c13-a51e-b08f0273a3fb";
-// const TODO_ID = "16bc784e-6231-4979-8731-75fa13386a75";
+/**
+ * Seed subtasks for a single todo.
+ *
+ * Before running:
+ * 1. Create or pick a todo in your local database and copy its id.
+ *    Example: SELECT id, title FROM "Todo" WHERE "userId" = '<your-user-id>' LIMIT 5;
+ * 2. Replace TODO_ID below with that value.
+ * 3. Run: npm run seed:subtasks
+ */
+// Required: set this to a todo id from your local "Todo" table.
+const TODO_ID = "fe6a0a62-145e-4fde-8d5f-44ad2faf6493";
 const TOTAL_SUBTASKS = 100;
 const POSITION_GAP = 1_000;
-const BATCH_SIZE = 500;
 
 const seedSubtasks = async () => {
   try {
-    console.log("Seeding subtasks...");
-    for (let i = 0; i < TOTAL_SUBTASKS; i += BATCH_SIZE) {
-      const batch = Array.from(
-        { length: Math.min(BATCH_SIZE, TOTAL_SUBTASKS - i) },
-        (_, index) => ({
-          todoId: TODO_ID,
-          title: `Subtask ${i + index + 1}`,
-          position: (i + index + 1) * POSITION_GAP,
-        }),
-      );
+    console.log(`Seeding ${TOTAL_SUBTASKS} subtasks...`);
 
-      await prisma.subtask.createMany({
-        data: batch,
-      });
-
-      console.log(`Seeded ${i + BATCH_SIZE} of ${TOTAL_SUBTASKS} subtasks`);
-    }
+    await prisma.subtask.createMany({
+      data: Array.from({ length: TOTAL_SUBTASKS }, (_, index) => ({
+        todoId: TODO_ID,
+        title: `Subtask ${index + 1}`,
+        position: (index + 1) * POSITION_GAP,
+      })),
+    });
 
     await prisma.todo.update({
       where: { id: TODO_ID },

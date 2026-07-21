@@ -1,8 +1,17 @@
 import { prisma } from "../config/db.js";
 
+/**
+ * Seed todos for a single user.
+ *
+ * Before running:
+ * 1. Register/login locally and copy your user id from the database.
+ *    Example: SELECT id, email FROM "User";
+ * 2. Replace USER_ID below with that value.
+ * 3. Run: npm run seed:todos
+ */
+// Required: set this to your local user's id from the "User" table.
 const USER_ID = "4e8c60d2-6cc3-4f1a-b207-3486467bea4b";
-const TOTAL_TODOS =
-  process.env.NODE_ENV === "development" ? 2_000_000 : 750_000;
+const TOTAL_TODOS = 750_000;
 const BATCH_SIZE = 10_000;
 
 const seedTodos = async () => {
