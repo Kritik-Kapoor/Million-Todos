@@ -2,9 +2,10 @@ import bcrypt from "bcryptjs";
 import { prisma } from "../config/db.js";
 import { generateHashedToken, generateOtp, generateRandomToken, generateToken, } from "../utils/generateToken.js";
 import { ApiError, ApiResponse, getErrorMessage, } from "../utils/apiResponse.js";
-import { TokenType } from "@prisma/client";
+import { TokenType, Prisma } from "@prisma/client";
 import { emailService } from "../services/email/email.service.js";
 import { parseDurationMs } from "../utils/dateTime.js";
+import { clearAuthCookie } from "../utils/authCookie.js";
 const USER_RETURN_OPTIONS = {
     username: true,
     email: true,
@@ -57,10 +58,7 @@ export const Login = async (req, res) => {
 };
 export const Logout = async (_, res) => {
     try {
-        res.cookie("million-todos-token", "", {
-            httpOnly: true,
-            expires: new Date(),
-        });
+        clearAuthCookie(res);
         return new ApiResponse(200, null, "User logged out successfully").send(res);
     }
     catch (error) {
@@ -112,19 +110,12 @@ export const updateUserPreferences = async (req, res) => {
     try {
         const userId = req.user.userId;
         const { dueDateReminder, emailReminder } = req.body;
-        const data = {};
-        if (typeof dueDateReminder === "boolean") {
-            data.dueDateReminder = dueDateReminder;
-        }
-        if (typeof emailReminder === "boolean") {
-            data.emailReminder = emailReminder;
-        }
-        if (Object.keys(data).length === 0) {
-            return new ApiError(400, "No valid preference fields provided").send(res);
+        if (dueDateReminder === undefined || emailReminder === undefined) {
+            return new ApiError(400, "Invalid input, both dueDateReminder and emailReminder must be provided").send(res);
         }
         const user = await prisma.user.update({
             where: { id: userId },
-            data,
+            data: req.body,
             select: USER_RETURN_OPTIONS,
         });
         return new ApiResponse(200, user, "User preferences updated successfully").send(res);
@@ -164,9 +155,8 @@ export const forgotPassword = async (req, res) => {
         });
         if (!storeToken)
             return new ApiError(500, "Failed to generate password reset mail").send(res);
-        //TODO: Use user.email after domain been setup in Resend
         const { success } = await emailService.sendPasswordResetEmail({
-            to: "kritik0401@gmail.com", //user.email,
+            to: user.email,
             username: user.username,
             passwordResetToken: rawToken,
         });
@@ -251,14 +241,21 @@ export const sendVerificationMail = async (req, res) => {
         });
         if (!storeToken)
             return new ApiError(500, "Failed to generate verification mail").send(res);
-        //TODO: Use user.email after domain been setup in Resend
-        const { success } = await emailService.sendVerificationEmail({
+        const emailResult = await emailService.sendVerificationEmail({
             to: user.email,
             username: user.username,
             verificationToken,
         });
-        if (!success)
+        if (!emailResult.success) {
+            //Delete the created token if email sending fails
+            await prisma.userTokens.delete({
+                where: {
+                    id: storeToken.id,
+                },
+            });
+            console.error(emailResult.error);
             return new ApiError(500, "Failed to send verification email").send(res);
+        }
         return new ApiResponse(200, null, "Verification email sent").send(res);
     }
     catch (error) {
@@ -307,6 +304,23 @@ export const verifyAccount = async (req, res) => {
         return new ApiResponse(200, null, "Account verified").send(res);
     }
     catch (error) {
+        return new ApiError(500, getErrorMessage(error)).send(res);
+    }
+};
+export const deleteAccount = async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        await prisma.user.delete({
+            where: { id: userId },
+        });
+        clearAuthCookie(res);
+        return new ApiResponse(200, null, "Account deleted successfully").send(res);
+    }
+    catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2025") {
+            return new ApiError(404, "User not found").send(res);
+        }
         return new ApiError(500, getErrorMessage(error)).send(res);
     }
 };

@@ -29,8 +29,8 @@ export const SETTINGS_TABS: {
   label: string;
   icon: LucideIcon;
 }[] = [
-  { key: "labels", label: "Labels", icon: Tag },
   { key: "account", label: "Account", icon: User },
+  { key: "labels", label: "Labels", icon: Tag },
   { key: "appearance", label: "Appearance", icon: Palette },
   { key: "notifications", label: "Notifications", icon: Bell },
   { key: "data", label: "Data", icon: Database },

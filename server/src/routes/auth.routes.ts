@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  deleteAccount,
   forgotPassword,
   getUser,
   Login,
@@ -36,5 +37,6 @@ router.post(
   sendVerificationMail,
 );
 router.get("/verify-email", rateLimiterMiddleware(), verifyAccount);
+router.delete("/delete-account", authenticateUser, deleteAccount);
 
 export default router;

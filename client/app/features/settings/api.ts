@@ -69,3 +69,10 @@ export const sendVerificationEmail = () =>
     fallbackErrorMessage: "Failed to send verification mail",
     responseType: "envelope",
   });
+
+export const deleteAccount = () =>
+  apiFetch<null>("/auth/delete-account", {
+    method: "DELETE",
+    fallbackErrorMessage: "Failed to delete account",
+    responseType: "envelope",
+  });

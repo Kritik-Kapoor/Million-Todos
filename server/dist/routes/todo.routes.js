@@ -1,12 +1,11 @@
 import { Router } from "express";
 import { createTodo, deleteAllTodos, deleteTodo, getFilteredTodos, getTodos, updateTodo, } from "../controllers/todo.controller.js";
-import { authenticateUser } from "../middlewares/authenticateUser.middleware.js";
+import rateLimiterMiddleware from "../middlewares/rateLimiter.middleware.js";
 const router = Router();
-// TODO Routes
-router.get("/", authenticateUser, getTodos);
-router.post("/", authenticateUser, createTodo);
-router.get("/filter", authenticateUser, getFilteredTodos);
-router.patch("/:todoId", authenticateUser, updateTodo);
-router.delete("/:todoId", authenticateUser, deleteTodo);
-router.delete("/all", authenticateUser, deleteAllTodos);
+router.get("/", rateLimiterMiddleware({ limit: 8, windowMs: 60 * 1000 }), getTodos);
+router.post("/", rateLimiterMiddleware({ limit: 20, windowMs: 60 * 1000 }), createTodo);
+router.get("/filter", getFilteredTodos);
+router.patch("/:todoId", updateTodo);
+router.delete("/:todoId", deleteTodo);
+router.delete("/all", deleteAllTodos);
 export default router;

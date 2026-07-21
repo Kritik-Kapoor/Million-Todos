@@ -8,8 +8,9 @@ import { type SubmitHandler, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import getErrorMessage from "@/lib/utils/getErrorMessage";
-import { sendVerificationEmail, updateAccount } from "../api";
+import { deleteAccount, sendVerificationEmail, updateAccount } from "../api";
 import type { UpdateAccountPayload } from "../types";
+import { useTodoStore } from "@/features/todos/store";
 
 const accountFormSchema = z
   .object({
@@ -49,8 +50,10 @@ type UseAccountPanelOptions = {
 export function useAccountPanel({ user }: UseAccountPanelOptions) {
   const [verificationEmailSent, setVerificationEmailSent] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const router = useRouter();
+  const { resetTodos } = useTodoStore();
 
   const form = useForm<AccountFormValues>({
     resolver: zodResolver(accountFormSchema),
@@ -82,6 +85,18 @@ export function useAccountPanel({ user }: UseAccountPanelOptions) {
     onError: (error) => toast.error(getErrorMessage(error)),
   });
 
+  const deleteAccountMutation = useMutation({
+    mutationFn: deleteAccount,
+    onSuccess: () => {
+      resetTodos();
+      toast.success("Account deleted successfully");
+      setIsDeleteDialogOpen(false);
+      router.push("/register");
+      router.refresh();
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
   const onSubmit: SubmitHandler<AccountFormValues> = useCallback(
     (data) => {
       const payload: UpdateAccountPayload = {
@@ -109,11 +124,15 @@ export function useAccountPanel({ user }: UseAccountPanelOptions) {
       isPasswordVisible,
       verificationEmailSent,
       isSendingVerificationEmail: sendVerificationEmailMutation.isPending,
+      isDeletingAccount: deleteAccountMutation.isPending,
+      isDeleteDialogOpen,
     },
     actions: {
       onSubmit,
       setIsPasswordVisible,
-      sendVerificationEmail: sendVerificationEmailMutation.mutateAsync,
+      sendVerificationEmail: sendVerificationEmailMutation.mutate,
+      setIsDeleteDialogOpen,
+      deleteAccount: deleteAccountMutation.mutate,
     },
   };
 }

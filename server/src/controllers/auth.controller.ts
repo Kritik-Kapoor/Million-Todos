@@ -12,9 +12,10 @@ import {
   ApiResponse,
   getErrorMessage,
 } from "../utils/apiResponse.js";
-import { TokenType } from "@prisma/client";
+import { TokenType, Prisma } from "@prisma/client";
 import { emailService } from "../services/email/email.service.js";
 import { parseDurationMs } from "../utils/dateTime.js";
+import { clearAuthCookie } from "../utils/authCookie.js";
 
 type RegisterBody = {
   username: string;
@@ -105,13 +106,7 @@ export const Login = async (req: Request, res: Response) => {
 
 export const Logout = async (_: Request, res: Response) => {
   try {
-    res.clearCookie("million-todos-token", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      domain: ".kritikkapoor.in",
-      path: "/",
-    });
+    clearAuthCookie(res);
     return new ApiResponse(200, null, "User logged out successfully").send(res);
   } catch (error) {
     return new ApiError(500, getErrorMessage(error)).send(res);
@@ -370,14 +365,23 @@ export const sendVerificationMail = async (req: Request, res: Response) => {
         res,
       );
 
-    const { success } = await emailService.sendVerificationEmail({
+    const emailResult = await emailService.sendVerificationEmail({
       to: user.email,
       username: user.username,
       verificationToken,
     });
 
-    if (!success)
+    if (!emailResult.success) {
+      //Delete the created token if email sending fails
+      await prisma.userTokens.delete({
+        where: {
+          id: storeToken.id,
+        },
+      });
+
+      console.error(emailResult.error);
       return new ApiError(500, "Failed to send verification email").send(res);
+    }
 
     return new ApiResponse(200, null, "Verification email sent").send(res);
   } catch (error) {
@@ -434,6 +438,29 @@ export const verifyAccount = async (req: Request, res: Response) => {
 
     return new ApiResponse(200, null, "Account verified").send(res);
   } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
+  }
+};
+
+export const deleteAccount = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+
+    await prisma.user.delete({
+      where: { id: userId },
+    });
+
+    clearAuthCookie(res);
+
+    return new ApiResponse(200, null, "Account deleted successfully").send(res);
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return new ApiError(404, "User not found").send(res);
+    }
+
     return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };

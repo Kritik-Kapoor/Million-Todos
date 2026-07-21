@@ -1,5 +1,6 @@
 import { prisma } from "../config/db.js";
 import { ApiError, ApiResponse, getErrorMessage, } from "../utils/apiResponse.js";
+const MAX_SUBTASKS_PER_TODO = 100;
 export const getSubtasksForTodo = async (req, res) => {
     try {
         const todoId = req.params.todoId;
@@ -44,6 +45,9 @@ export const createSubtask = async (req, res) => {
         });
         if (!todo) {
             return new ApiError(404, "Todo not found").send(res);
+        }
+        if (todo.subtaskCount >= MAX_SUBTASKS_PER_TODO) {
+            return new ApiError(400, `A todo cannot have more than ${MAX_SUBTASKS_PER_TODO} subtasks`).send(res);
         }
         const lastSubtask = await prisma.subtask.findFirst({
             where: { todoId },

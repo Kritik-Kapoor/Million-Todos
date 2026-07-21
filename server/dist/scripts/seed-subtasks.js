@@ -1,6 +1,8 @@
 import { prisma } from "../config/db.js";
-const TODO_ID = "16bc784e-6231-4979-8731-75fa13386a75";
-const TOTAL_SUBTASKS = 1_000;
+// Update this to the todo ID you want to seed subtasks for
+const TODO_ID = "89cee62b-8c4d-4c13-a51e-b08f0273a3fb";
+// const TODO_ID = "16bc784e-6231-4979-8731-75fa13386a75";
+const TOTAL_SUBTASKS = 100;
 const POSITION_GAP = 1_000;
 const BATCH_SIZE = 500;
 const seedSubtasks = async () => {

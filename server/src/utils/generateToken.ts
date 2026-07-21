@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomInt } from "crypto";
 import type { Response } from "express";
 import jwt, { type SignOptions } from "jsonwebtoken";
+import { setAuthCookie } from "./authCookie.js";
 
 interface AccessTokenPayload {
   userId: string;
@@ -13,14 +14,7 @@ export const generateToken = (userId: string, res: Response) => {
   };
   const token = jwt.sign(payload, process.env.JWT_SECRET!, options);
 
-  return res.cookie("million-todos-token", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-    domain: ".kritikkapoor.in",
-    path: "/",
-    maxAge: 1000 * 60 * 60 * 24 * 7,
-  });
+  return setAuthCookie(res, token);
 };
 
 export const generateRandomToken = () => {

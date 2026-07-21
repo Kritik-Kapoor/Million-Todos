@@ -1,7 +1,4 @@
 export const APP_NAME = "Million Todos";
-export function getAppUrl() {
-    return process.env.WEBAPP_URL ?? "http://localhost:3000";
-}
 export function escapeHtml(text) {
     return text
         .replace(/&/g, "&amp;")
@@ -10,7 +7,7 @@ export function escapeHtml(text) {
         .replace(/"/g, "&quot;");
 }
 export function buildAppUrl(path) {
-    return `${getAppUrl().replace(/\/$/, "")}${path}`;
+    return `${process.env.WEBAPP_URL.replace(/\/$/, "")}${path}`;
 }
 export function buildEmailShell({ subject, headerTitle, body, footer = `You are receiving this email from ${APP_NAME}.`, }) {
     return `

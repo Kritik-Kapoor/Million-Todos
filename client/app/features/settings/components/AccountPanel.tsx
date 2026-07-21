@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Controller } from "react-hook-form";
 import { Button } from "@/components/ui/button";
+import ConfirmationDialog from "@/components/shared/dialogs/ConfirmationDialog";
 import {
   Field,
   FieldDescription,
@@ -36,8 +37,16 @@ const AccountPanel = ({ user }: AccountPanelProps) => {
       isPasswordVisible,
       verificationEmailSent,
       isSendingVerificationEmail,
+      isDeletingAccount,
+      isDeleteDialogOpen,
     },
-    actions: { onSubmit, setIsPasswordVisible, sendVerificationEmail },
+    actions: {
+      onSubmit,
+      setIsPasswordVisible,
+      sendVerificationEmail,
+      setIsDeleteDialogOpen,
+      deleteAccount,
+    },
   } = useAccountPanel({ user });
 
   return (
@@ -79,9 +88,9 @@ const AccountPanel = ({ user }: AccountPanelProps) => {
                 {!user.isEmailVerified && (
                   <FieldDescription className="flex items-center gap-1 py-1">
                     <InfoIcon className="h-4 w-4 text-blue-500" />
-                    <p className="text-xs">
+                    <span className="text-xs">
                       Only verified email addresses can receive reminders.
-                    </p>
+                    </span>
                   </FieldDescription>
                 )}
               </div>
@@ -220,11 +229,31 @@ const AccountPanel = ({ user }: AccountPanelProps) => {
         <p className="text-xs text-muted-foreground">
           Deleting your account is permanent and cannot be undone.
         </p>
-        <Button type="button" variant="destructive" size="sm">
-          <AlertTriangle className="h-4 w-4" />
-          Delete account
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          onClick={() => setIsDeleteDialogOpen(true)}
+          disabled={isDeletingAccount}
+        >
+          {isDeletingAccount ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <AlertTriangle className="h-4 w-4" />
+          )}
+          {isDeletingAccount ? "Deleting account..." : "Delete account"}
         </Button>
       </div>
+
+      <ConfirmationDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        callbackFn={() => deleteAccount()}
+        title="Delete account"
+        description="This permanently deletes your account, todos, labels, subtasks, and reminders. This action cannot be undone."
+        btnText="account"
+        isLoading={isDeletingAccount}
+      />
     </div>
   );
 };

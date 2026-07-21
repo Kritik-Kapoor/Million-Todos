@@ -22,7 +22,7 @@ type SettingsModalProps = {
 };
 
 const SettingsModal = ({ isOpen, onOpenChange, user }: SettingsModalProps) => {
-  const [activeTab, setActiveTab] = useState<SettingsTabKey>("labels");
+  const [activeTab, setActiveTab] = useState<SettingsTabKey>("account");
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
