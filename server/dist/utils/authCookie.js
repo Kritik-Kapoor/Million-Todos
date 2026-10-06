@@ -8,8 +8,6 @@ export function getAuthCookieOptions(overrides = {}) {
         path: "/",
         ...overrides,
     };
-    // Domain is production-only. On localhost, setting domain breaks clearCookie
-    // because the browser stores a host-only cookie instead.
     if (isProduction) {
         options.domain = process.env.COOKIE_DOMAIN ?? ".kritikkapoor.in";
     }

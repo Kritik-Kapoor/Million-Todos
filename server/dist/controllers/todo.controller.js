@@ -1,13 +1,28 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/db.js";
 import { ApiError, ApiResponse, getErrorMessage, } from "../utils/apiResponse.js";
+import { once } from "node:events";
 const TODO_DESCRIPTION_MAX_LENGTH = 300;
+const BATCH_SIZE = 5000;
+const MAX_WORKERS = 5;
+const MAX_RETRY_PASSES = 2;
 const LABELS_INCLUDE = {
     labels: {
         select: {
             label: { select: { id: true, name: true, color: true } },
         },
     },
+};
+const toNdjson = (rows) => {
+    let out = "";
+    for (const { labels: todoLabels, ...todo } of rows) {
+        out +=
+            JSON.stringify({
+                ...todo,
+                labels: todoLabels.map(({ label }) => label),
+            }) + "\n";
+    }
+    return out;
 };
 function formatTodoWithLabels({ labels: todoLabels, ...todo }) {
     return {
@@ -16,48 +31,153 @@ function formatTodoWithLabels({ labels: todoLabels, ...todo }) {
     };
 }
 export const getTodos = async (req, res) => {
-    const BATCH_SIZE = 5000;
-    res.setHeader("Content-Type", "application/x-ndjson");
-    res.setHeader("Transfer-Encoding", "chunked");
-    res.setHeader("Cache-Control", "no-cache");
     const userId = req.user.userId;
-    let cursor = undefined;
-    let todos = [];
-    try {
-        while (true) {
-            todos = await prisma.todo.findMany({
-                where: { userId },
-                take: BATCH_SIZE,
-                orderBy: { seq: "asc" },
-                include: LABELS_INCLUDE,
-                ...(cursor !== undefined ? { skip: 1, cursor: { seq: cursor } } : {}),
-            });
-            if (todos.length === 0)
-                break;
-            for (const { labels: todoLabels, ...todo } of todos) {
-                res.write(JSON.stringify({
-                    ...todo,
-                    labels: todoLabels.map(({ label }) => label),
-                }) + "\n");
-            }
-            cursor = todos[todos.length - 1].seq;
-            // Fewer rows than requested means we've reached the last batch
-            if (todos.length < BATCH_SIZE)
-                break;
+    const profileStream = process.env.STREAM_PROFILE === "true";
+    const streamStartedAt = performance.now();
+    let firstByteSent = false;
+    const profile = {
+        aggregateMs: 0,
+        dbMsSum: 0,
+        ndjsonMsSum: 0,
+        writeMsSum: 0,
+        bytesWritten: 0,
+        sliceCount: 0,
+        firstByteMs: null,
+    };
+    const logProfile = (extra) => {
+        if (!profileStream)
+            return;
+        console.log(JSON.stringify({
+            event: "getTodos.stream.profile",
+            userId,
+            totalMs: Math.round(performance.now() - streamStartedAt),
+            ...profile,
+            ...extra,
+        }));
+    };
+    res.setHeader("Content-Type", "application/x-ndjson");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("X-Accel-Buffering", "no");
+    // Only set when the client disconnects. Slice failures do NOT set this.
+    let clientGone = false;
+    res.on("close", () => {
+        if (!res.writableFinished)
+            clientGone = true;
+    });
+    const writeChunk = async (chunk) => {
+        if (clientGone || chunk.length === 0)
+            return;
+        const writeStartedAt = performance.now();
+        if (!firstByteSent) {
+            firstByteSent = true;
+            profile.firstByteMs = Math.round(writeStartedAt - streamStartedAt);
         }
+        const ok = res.write(chunk);
+        res.flush?.();
+        if (!ok) {
+            await Promise.race([once(res, "drain"), once(res, "close")]);
+        }
+        profile.writeMsSum += performance.now() - writeStartedAt;
+        profile.bytesWritten += Buffer.byteLength(chunk, "utf8");
+    };
+    /**
+     * Runs the given slices through a pool of at most MAX_WORKERS workers.
+     * A failing slice is recorded and the worker moves on to the next one.
+     * Returns the slices that failed.
+     */
+    const runPool = async (slices) => {
+        const failed = [];
+        let next = 0; // shared "which slice is next" pointer
+        const worker = async () => {
+            while (!clientGone) {
+                const i = next++; // sync read+increment: no two workers claim the same slice
+                if (i >= slices.length)
+                    return;
+                const range = slices[i];
+                const [from, to] = range;
+                let rows;
+                try {
+                    const dbStartedAt = performance.now();
+                    rows = await prisma.todo.findMany({
+                        where: { userId, seq: { gte: from, lt: to } },
+                        orderBy: { seq: "asc" },
+                        include: LABELS_INCLUDE,
+                    });
+                    profile.dbMsSum += performance.now() - dbStartedAt;
+                    profile.sliceCount += 1;
+                }
+                catch (err) {
+                    console.error(`slice [${from}, ${to}) failed:`, getErrorMessage(err));
+                    failed.push(range); // remember it, keep the worker going
+                    continue;
+                }
+                const ndjsonStartedAt = performance.now();
+                const chunk = toNdjson(rows);
+                profile.ndjsonMsSum += performance.now() - ndjsonStartedAt;
+                await writeChunk(chunk);
+            }
+        };
+        const workerCount = Math.min(MAX_WORKERS, slices.length);
+        await Promise.all(Array.from({ length: workerCount }, worker));
+        return failed;
+    };
+    try {
+        console.time("stream");
+        const aggregateStartedAt = performance.now();
+        const { _min, _max, _count } = await prisma.todo.aggregate({
+            where: { userId },
+            _min: { seq: true },
+            _max: { seq: true },
+            _count: { _all: true },
+        });
+        profile.aggregateMs = Math.round(performance.now() - aggregateStartedAt);
+        if (_min.seq === null || _max.seq === null || _count._all === 0) {
+            console.timeEnd("stream");
+            logProfile({ todoCount: 0 });
+            return;
+        }
+        const minSeq = _min.seq;
+        const maxSeq = _max.seq;
+        const sliceCount = Math.ceil(_count._all / BATCH_SIZE);
+        const window = Math.ceil((maxSeq - minSeq + 1) / sliceCount);
+        const ranges = [];
+        for (let from = minSeq; from <= maxSeq; from += window) {
+            ranges.push([from, Math.min(from + window, maxSeq + 1)]);
+        }
+        // First pass over every slice
+        let failedSlices = await runPool(ranges);
+        // Retry passes for whatever failed
+        for (let pass = 1; pass <= MAX_RETRY_PASSES && failedSlices.length > 0 && !clientGone; pass++) {
+            console.warn(`retry pass ${pass}: ${failedSlices.length} slice(s)`);
+            failedSlices = await runPool(failedSlices);
+        }
+        // Anything still failing after all retries: tell the client the data is incomplete
+        if (failedSlices.length > 0 && !clientGone) {
+            await writeChunk(JSON.stringify({
+                error: `Failed to load ${failedSlices.length} slice(s) after ${MAX_RETRY_PASSES} retries`,
+                failedRanges: failedSlices,
+            }) + "\n");
+        }
+        console.timeEnd("stream");
+        logProfile({
+            todoCount: _count._all,
+            sliceTotal: ranges.length,
+            failedSlices: failedSlices.length,
+        });
     }
     catch (error) {
+        // Only planning-level failures (e.g. the aggregate query) land here
         const message = getErrorMessage(error);
         if (!res.headersSent) {
             new ApiError(500, message).send(res);
         }
-        else {
-            // Mid-stream error
+        else if (!res.writableEnded && !res.destroyed) {
             res.write(JSON.stringify({ error: message }) + "\n");
         }
     }
     finally {
-        res.end();
+        if (!res.writableEnded)
+            res.end();
     }
 };
 export const getFilteredTodos = async (req, res) => {

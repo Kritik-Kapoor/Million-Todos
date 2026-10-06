@@ -44,8 +44,43 @@ function formatTodoWithLabels({ labels: todoLabels, ...todo }: TodoRow) {
   };
 }
 
+type StreamProfile = {
+  aggregateMs: number;
+  dbMsSum: number;
+  ndjsonMsSum: number;
+  writeMsSum: number;
+  bytesWritten: number;
+  sliceCount: number;
+  firstByteMs: number | null;
+};
+
 export const getTodos = async (req: Request, res: Response) => {
   const userId = req.user!.userId;
+  const profileStream = process.env.STREAM_PROFILE === "true";
+  const streamStartedAt = performance.now();
+  let firstByteSent = false;
+  const profile: StreamProfile = {
+    aggregateMs: 0,
+    dbMsSum: 0,
+    ndjsonMsSum: 0,
+    writeMsSum: 0,
+    bytesWritten: 0,
+    sliceCount: 0,
+    firstByteMs: null,
+  };
+
+  const logProfile = (extra?: Record<string, unknown>) => {
+    if (!profileStream) return;
+    console.log(
+      JSON.stringify({
+        event: "getTodos.stream.profile",
+        userId,
+        totalMs: Math.round(performance.now() - streamStartedAt),
+        ...profile,
+        ...extra,
+      }),
+    );
+  };
 
   res.setHeader("Content-Type", "application/x-ndjson");
   res.setHeader("Cache-Control", "no-cache");
@@ -60,12 +95,22 @@ export const getTodos = async (req: Request, res: Response) => {
   const writeChunk = async (chunk: string) => {
     if (clientGone || chunk.length === 0) return;
 
+    const writeStartedAt = performance.now();
+
+    if (!firstByteSent) {
+      firstByteSent = true;
+      profile.firstByteMs = Math.round(writeStartedAt - streamStartedAt);
+    }
+
     const ok = res.write(chunk);
     (res as unknown as { flush?: () => void }).flush?.();
 
     if (!ok) {
       await Promise.race([once(res, "drain"), once(res, "close")]);
     }
+
+    profile.writeMsSum += performance.now() - writeStartedAt;
+    profile.bytesWritten += Buffer.byteLength(chunk, "utf8");
   };
 
   /**
@@ -87,18 +132,25 @@ export const getTodos = async (req: Request, res: Response) => {
 
         let rows: TodoRow[];
         try {
+          const dbStartedAt = performance.now();
           rows = await prisma.todo.findMany({
             where: { userId, seq: { gte: from, lt: to } },
             orderBy: { seq: "asc" },
             include: LABELS_INCLUDE,
           });
+          profile.dbMsSum += performance.now() - dbStartedAt;
+          profile.sliceCount += 1;
         } catch (err) {
           console.error(`slice [${from}, ${to}) failed:`, getErrorMessage(err));
           failed.push(range); // remember it, keep the worker going
           continue;
         }
 
-        await writeChunk(toNdjson(rows));
+        const ndjsonStartedAt = performance.now();
+        const chunk = toNdjson(rows);
+        profile.ndjsonMsSum += performance.now() - ndjsonStartedAt;
+
+        await writeChunk(chunk);
       }
     };
 
@@ -110,15 +162,18 @@ export const getTodos = async (req: Request, res: Response) => {
   try {
     console.time("stream");
 
+    const aggregateStartedAt = performance.now();
     const { _min, _max, _count } = await prisma.todo.aggregate({
       where: { userId },
       _min: { seq: true },
       _max: { seq: true },
       _count: { _all: true },
     });
+    profile.aggregateMs = Math.round(performance.now() - aggregateStartedAt);
 
     if (_min.seq === null || _max.seq === null || _count._all === 0) {
       console.timeEnd("stream");
+      logProfile({ todoCount: 0 });
       return;
     }
 
@@ -157,6 +212,11 @@ export const getTodos = async (req: Request, res: Response) => {
     }
 
     console.timeEnd("stream");
+    logProfile({
+      todoCount: _count._all,
+      sliceTotal: ranges.length,
+      failedSlices: failedSlices.length,
+    });
   } catch (error) {
     // Only planning-level failures (e.g. the aggregate query) land here
     const message = getErrorMessage(error);
