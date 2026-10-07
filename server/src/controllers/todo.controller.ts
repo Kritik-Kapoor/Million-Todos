@@ -23,16 +23,25 @@ const LABELS_INCLUDE = {
 } satisfies Prisma.TodoInclude;
 
 type TodoRow = Prisma.TodoGetPayload<{ include: typeof LABELS_INCLUDE }>;
+
+const TODO_STREAM_SELECT = {
+  id: true,
+  userId: true,
+  seq: true,
+  title: true,
+  completed: true,
+  dueDate: true,
+  subtaskCount: true,
+  hasLabels: true,
+} satisfies Prisma.TodoSelect;
+
+type StreamTodoRow = Prisma.TodoGetPayload<{ select: typeof TODO_STREAM_SELECT }>;
 type Range = [from: number, to: number];
 
-const toNdjson = (rows: TodoRow[]): string => {
+const toStreamNdjson = (rows: StreamTodoRow[]): string => {
   let out = "";
-  for (const { labels: todoLabels, ...todo } of rows) {
-    out +=
-      JSON.stringify({
-        ...todo,
-        labels: todoLabels.map(({ label }) => label),
-      }) + "\n";
+  for (const row of rows) {
+    out += JSON.stringify(row) + "\n";
   }
   return out;
 };
@@ -130,13 +139,13 @@ export const getTodos = async (req: Request, res: Response) => {
         const range = slices[i]!;
         const [from, to] = range;
 
-        let rows: TodoRow[];
+        let rows: StreamTodoRow[];
         try {
           const dbStartedAt = performance.now();
           rows = await prisma.todo.findMany({
             where: { userId, seq: { gte: from, lt: to } },
             orderBy: { seq: "asc" },
-            include: LABELS_INCLUDE,
+            select: TODO_STREAM_SELECT,
           });
           profile.dbMsSum += performance.now() - dbStartedAt;
           profile.sliceCount += 1;
@@ -147,7 +156,7 @@ export const getTodos = async (req: Request, res: Response) => {
         }
 
         const ndjsonStartedAt = performance.now();
-        const chunk = toNdjson(rows);
+        const chunk = toStreamNdjson(rows);
         profile.ndjsonMsSum += performance.now() - ndjsonStartedAt;
 
         await writeChunk(chunk);

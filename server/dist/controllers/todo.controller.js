@@ -13,14 +13,20 @@ const LABELS_INCLUDE = {
         },
     },
 };
-const toNdjson = (rows) => {
+const TODO_STREAM_SELECT = {
+    id: true,
+    userId: true,
+    seq: true,
+    title: true,
+    completed: true,
+    dueDate: true,
+    subtaskCount: true,
+    hasLabels: true,
+};
+const toStreamNdjson = (rows) => {
     let out = "";
-    for (const { labels: todoLabels, ...todo } of rows) {
-        out +=
-            JSON.stringify({
-                ...todo,
-                labels: todoLabels.map(({ label }) => label),
-            }) + "\n";
+    for (const row of rows) {
+        out += JSON.stringify(row) + "\n";
     }
     return out;
 };
@@ -101,7 +107,7 @@ export const getTodos = async (req, res) => {
                     rows = await prisma.todo.findMany({
                         where: { userId, seq: { gte: from, lt: to } },
                         orderBy: { seq: "asc" },
-                        include: LABELS_INCLUDE,
+                        select: TODO_STREAM_SELECT,
                     });
                     profile.dbMsSum += performance.now() - dbStartedAt;
                     profile.sliceCount += 1;
@@ -112,7 +118,7 @@ export const getTodos = async (req, res) => {
                     continue;
                 }
                 const ndjsonStartedAt = performance.now();
-                const chunk = toNdjson(rows);
+                const chunk = toStreamNdjson(rows);
                 profile.ndjsonMsSum += performance.now() - ndjsonStartedAt;
                 await writeChunk(chunk);
             }
