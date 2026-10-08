@@ -67,7 +67,7 @@ export function useTodosPage() {
 
   const labelsByTodoIdRef = useRef<TodoLabelsByTodoId | null>(null);
 
-  const applyKnownLabels = useCallback(
+  const applyTodoLabels = useCallback(
     (todoIds?: string[]) => {
       const map = labelsByTodoIdRef.current;
       if (!map) return;
@@ -88,11 +88,19 @@ export function useTodosPage() {
     [mergeTodoLabels],
   );
 
+  const addTodoBatchWithLabels = useCallback(
+    (todos: Todo[]) => {
+      addTodoBatch(todos);
+      applyTodoLabels(todos.map((t) => t.id));
+    },
+    [addTodoBatch, applyTodoLabels],
+  );
+
   const {
     push: pushTodos,
     flush: flushTodos,
     clear: clearTodos,
-  } = useThrottledFlush<Todo>(addTodoBatch, 200);
+  } = useThrottledFlush<Todo>(addTodoBatchWithLabels, 200);
 
   const totalCount = useTodoStore((state) => state.allIds.length);
   const completedCount = useTodoStore((state) => state.completedCount);
@@ -140,7 +148,7 @@ export function useTodosPage() {
       try {
         const { byTodoId } = await fetchTodoLabels(controller.signal);
         labelsByTodoIdRef.current = byTodoId;
-        applyKnownLabels();
+        applyTodoLabels();
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
           console.error("[todos] failed to load labels:", err);
@@ -166,7 +174,7 @@ export function useTodosPage() {
 
           if (done) {
             flushTodos();
-            applyKnownLabels();
+            applyTodoLabels();
             break;
           }
 
@@ -189,10 +197,7 @@ export function useTodosPage() {
               console.error("[stream] failed to parse line:", line);
             }
           }
-          if (batchTodos.length > 0) {
-            pushTodos(batchTodos);
-            applyKnownLabels(batchTodos.map((t) => t.id));
-          }
+          if (batchTodos.length > 0) pushTodos(batchTodos);
         }
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
@@ -207,7 +212,7 @@ export function useTodosPage() {
       controller.abort();
       clearTodos();
     };
-  }, [pushTodos, flushTodos, clearTodos, resetTodos, applyKnownLabels]);
+  }, [pushTodos, flushTodos, clearTodos, resetTodos, applyTodoLabels]);
 
   const createTodoMutation = useMutation({
     mutationFn: createTodo,
