@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Todo } from "@/types/todo";
+import type { Todo, TodoLabel } from "@/types/todo";
 
 const _byId = new Map<string, Todo>();
 const _allIds: string[] = [];
@@ -16,6 +16,7 @@ type TodoStore = {
   replaceTodo: (tempId: string, todo: Todo) => void;
   removeTodo: (id: string) => void;
   updateTodo: (id: string, changes: Partial<Todo>) => void;
+  mergeTodoLabels: (byTodoId: Record<string, TodoLabel[]>) => void;
   incrementSubtaskCount: (id: string, value: number) => void;
 };
 
@@ -42,7 +43,11 @@ export const useTodoStore = create<TodoStore>()((set) => ({
         if (existing.completed !== todo.completed) {
           completedDelta += todo.completed ? 1 : -1;
         }
-        _byId.set(todo.id, todo);
+        _byId.set(todo.id, {
+          ...existing,
+          ...todo,
+          labels: todo.labels ?? existing.labels,
+        });
         continue;
       }
 
@@ -88,6 +93,19 @@ export const useTodoStore = create<TodoStore>()((set) => ({
       version: state.version + 1,
       completedCount: state.completedCount - (wasCompleted ? 1 : 0),
     }));
+  },
+
+  mergeTodoLabels: (byTodoId) => {
+    let changed = false;
+
+    for (const [id, labels] of Object.entries(byTodoId)) {
+      const existing = _byId.get(id);
+      if (!existing) continue;
+      _byId.set(id, { ...existing, labels });
+      changed = true;
+    }
+
+    if (changed) set((state) => ({ version: state.version + 1 }));
   },
 
   updateTodo: (id, changes) => {

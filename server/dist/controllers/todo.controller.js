@@ -27,22 +27,14 @@ const toStreamNdjson = (rows) => {
     }
     return out;
 };
-/** Wait for drain or client disconnect without leaking `once` listeners per batch. */
 const waitForDrainOrClose = (res) => new Promise((resolve) => {
-    const onDrain = () => {
-        cleanup();
+    const done = () => {
+        res.off("drain", done);
+        res.off("close", done);
         resolve();
     };
-    const onClose = () => {
-        cleanup();
-        resolve();
-    };
-    const cleanup = () => {
-        res.off("drain", onDrain);
-        res.off("close", onClose);
-    };
-    res.once("drain", onDrain);
-    res.once("close", onClose);
+    res.once("drain", done);
+    res.once("close", done);
 });
 const writeStreamChunk = async (res, chunk, isGone) => {
     if (isGone() || chunk.length === 0)
@@ -78,9 +70,7 @@ export const getTodos = async (req, res) => {
                     take: BATCH_SIZE,
                     orderBy: { seq: "asc" },
                     select: TODO_STREAM_SELECT,
-                    ...(cursor !== undefined
-                        ? { skip: 1, cursor: { seq: cursor } }
-                        : {}),
+                    ...(cursor !== undefined ? { skip: 1, cursor: { seq: cursor } } : {}),
                 });
             }
             catch (err) {
@@ -110,6 +100,26 @@ export const getTodos = async (req, res) => {
     finally {
         if (!res.writableEnded)
             res.end();
+    }
+};
+export const getTodoLabels = async (req, res) => {
+    try {
+        const userId = req.user.userId;
+        const links = await prisma.todoLabel.findMany({
+            where: { todo: { userId, hasLabels: true } },
+            select: {
+                todoId: true,
+                label: { select: { id: true, name: true, color: true } },
+            },
+        });
+        const byTodoId = {};
+        for (const { todoId, label } of links) {
+            (byTodoId[todoId] ??= []).push(label);
+        }
+        return new ApiResponse(200, { byTodoId }).send(res);
+    }
+    catch (error) {
+        return new ApiError(500, getErrorMessage(error)).send(res);
     }
 };
 export const getFilteredTodos = async (req, res) => {

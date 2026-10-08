@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/utils/apiClient";
-import type { Todo } from "@/types/todo";
+import type { Todo, TodoLabel } from "@/types/todo";
 import {
   dueDateFilterToRange,
   type DueDateFilter,
@@ -37,6 +37,14 @@ export function hasActiveFilters(filters: TodoFilters): boolean {
     filters.dueDate
   );
 }
+
+export type TodoLabelsByTodoId = Record<string, TodoLabel[]>;
+
+export const fetchTodoLabels = (signal?: AbortSignal) =>
+  apiFetch<{ byTodoId: TodoLabelsByTodoId }>("/todos/labels", {
+    signal,
+    fallbackErrorMessage: "Failed to load todo labels",
+  });
 
 export const createTodo = (data: {
   title: string;

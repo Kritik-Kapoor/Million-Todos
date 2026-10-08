@@ -11,10 +11,12 @@ import {
   buildFilterParams,
   createTodo,
   deleteTodo,
+  fetchTodoLabels,
   hasActiveFilters,
   updateTodo,
+  type TodoFilters,
+  type TodoLabelsByTodoId,
 } from "../api";
-import type { TodoFilters } from "../api";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { labelQueryKeys } from "@/features/settings/constants";
 import { fetchLabels } from "@/features/settings/api";
@@ -59,8 +61,32 @@ export function useTodosPage() {
     replaceTodo,
     removeTodo,
     updateTodo: updateTodoInStore,
+    mergeTodoLabels,
     incrementSubtaskCount,
   } = useTodoStore();
+
+  const labelsByTodoIdRef = useRef<TodoLabelsByTodoId | null>(null);
+
+  const applyKnownLabels = useCallback(
+    (todoIds?: string[]) => {
+      const map = labelsByTodoIdRef.current;
+      if (!map) return;
+
+      if (!todoIds) {
+        mergeTodoLabels(map);
+        return;
+      }
+
+      const todoWithLabels: TodoLabelsByTodoId = {};
+      for (const id of todoIds) {
+        const labels = map[id];
+        if (labels) todoWithLabels[id] = labels;
+      }
+      if (Object.keys(todoWithLabels).length > 0)
+        mergeTodoLabels(todoWithLabels);
+    },
+    [mergeTodoLabels],
+  );
 
   const {
     push: pushTodos,
@@ -106,8 +132,21 @@ export function useTodosPage() {
 
   useEffect(() => {
     resetTodos();
+    labelsByTodoIdRef.current = null;
 
     const controller = new AbortController();
+
+    const loadTodoLabels = async () => {
+      try {
+        const { byTodoId } = await fetchTodoLabels(controller.signal);
+        labelsByTodoIdRef.current = byTodoId;
+        applyKnownLabels();
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          console.error("[todos] failed to load labels:", err);
+        }
+      }
+    };
 
     const streamTodos = async () => {
       try {
@@ -127,6 +166,7 @@ export function useTodosPage() {
 
           if (done) {
             flushTodos();
+            applyKnownLabels();
             break;
           }
 
@@ -149,7 +189,10 @@ export function useTodosPage() {
               console.error("[stream] failed to parse line:", line);
             }
           }
-          if (batchTodos.length > 0) pushTodos(batchTodos);
+          if (batchTodos.length > 0) {
+            pushTodos(batchTodos);
+            applyKnownLabels(batchTodos.map((t) => t.id));
+          }
         }
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
@@ -158,12 +201,13 @@ export function useTodosPage() {
       }
     };
 
+    loadTodoLabels();
     streamTodos();
     return () => {
       controller.abort();
       clearTodos();
     };
-  }, [pushTodos, flushTodos, clearTodos, resetTodos]);
+  }, [pushTodos, flushTodos, clearTodos, resetTodos, applyKnownLabels]);
 
   const createTodoMutation = useMutation({
     mutationFn: createTodo,

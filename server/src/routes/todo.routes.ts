@@ -4,6 +4,7 @@ import {
   deleteAllTodos,
   deleteTodo,
   getFilteredTodos,
+  getTodoLabels,
   getTodos,
   updateTodo,
 } from "../controllers/todo.controller.js";
@@ -22,6 +23,7 @@ router.post(
   createTodo,
 );
 router.get("/filter", getFilteredTodos);
+router.get("/labels", getTodoLabels);
 router.patch("/:todoId", updateTodo);
 router.delete("/:todoId", deleteTodo);
 router.delete("/all", deleteAllTodos);

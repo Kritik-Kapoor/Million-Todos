@@ -29,6 +29,7 @@ const TODO_STREAM_SELECT = {
   dueDate: true,
   subtaskCount: true,
   hasLabels: true,
+  description: true,
 } satisfies Prisma.TodoSelect;
 
 type StreamTodoRow = Prisma.TodoGetPayload<{
@@ -129,6 +130,34 @@ export const getTodos = async (req: Request, res: Response) => {
     }
   } finally {
     if (!res.writableEnded) res.end();
+  }
+};
+
+export const getTodoLabels = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+
+    const todoWithLabels = await prisma.todoLabel.findMany({
+      where: { todo: { userId, hasLabels: true } },
+      select: {
+        todoId: true,
+        label: { select: { id: true, name: true, color: true } },
+      },
+    });
+
+    const byTodoId: Record<
+      string,
+      Array<{ id: string; name: string; color: string }>
+    > = {};
+
+    for (const { todoId, label } of todoWithLabels) {
+      if (byTodoId[todoId] === undefined) byTodoId[todoId] = [];
+      byTodoId[todoId].push(label);
+    }
+
+    return new ApiResponse(200, { byTodoId }).send(res);
+  } catch (error) {
+    return new ApiError(500, getErrorMessage(error)).send(res);
   }
 };
 

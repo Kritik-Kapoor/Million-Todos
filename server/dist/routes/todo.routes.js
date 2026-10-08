@@ -1,10 +1,11 @@
 import { Router } from "express";
-import { createTodo, deleteAllTodos, deleteTodo, getFilteredTodos, getTodos, updateTodo, } from "../controllers/todo.controller.js";
+import { createTodo, deleteAllTodos, deleteTodo, getFilteredTodos, getTodoLabels, getTodos, updateTodo, } from "../controllers/todo.controller.js";
 import rateLimiterMiddleware from "../middlewares/rateLimiter.middleware.js";
 const router = Router();
 router.get("/", rateLimiterMiddleware({ limit: 8, windowMs: 60 * 1000 }), getTodos);
 router.post("/", rateLimiterMiddleware({ limit: 20, windowMs: 60 * 1000 }), createTodo);
 router.get("/filter", getFilteredTodos);
+router.get("/labels", getTodoLabels);
 router.patch("/:todoId", updateTodo);
 router.delete("/:todoId", deleteTodo);
 router.delete("/all", deleteAllTodos);
